@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results — {{ job.job_name }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav-bar">
+            <a href="/" class="nav-brand">
+                <span>&#129516;</span> Protein Intelligence
+            </a>
+            <div class="nav-links">
+                <a href="/">New Prediction</a>
+                <a href="/jobs">Job History</a>
+            </div>
+        </nav>
+
+        <div class="result-header">
+            <h1>{{ job.job_name }}</h1>
+            <p class="result-subtitle">Prediction complete — {{ summary.total }} residues analyzed</p>
+        </div>
+
+        <!-- Confidence Summary -->
+        <section class="results-section">
+            <h2>Confidence Summary</h2>
+            <div class="stats-grid">
+                <div class="stat-card stat-very-high">
+                    <div class="stat-value">{{ summary.pct_very_high }}%</div>
+                    <div class="stat-label">Very High (&gt;90)</div>
+                    <div class="stat-count">{{ summary.very_high }} residues</div>
+                </div>
+                <div class="stat-card stat-high">
+                    <div class="stat-value">{{ summary.pct_high }}%</div>
+                    <div class="stat-label">Confident (70–90)</div>
+                    <div class="stat-count">{{ summary.high }} residues</div>
+                </div>
+                <div class="stat-card stat-low">
+                    <div class="stat-value">{{ summary.pct_low }}%</div>
+                    <div class="stat-label">Low (50–70)</div>
+                    <div class="stat-count">{{ summary.low }} residues</div>
+                </div>
+                <div class="stat-card stat-very-low">
+                    <div class="stat-value">{{ summary.pct_very_low }}%</div>
+                    <div class="stat-label">Very Low (&lt;50)</div>
+                    <div class="stat-count">{{ summary.very_low }} residues</div>
+                </div>
+            </div>
+            <div class="mean-score">
+                Mean pLDDT: <strong>{{ summary.mean_plddt }}</strong>
+            </div>
+        </section>
+
+        <!-- Per-Residue Chart -->
+        <section class="results-section">
+            <h2>Per-Residue Confidence (pLDDT)</h2>
+            <div class="chart-container">
+                <canvas id="plddtChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Downloads -->
+        <section class="results-section">
+            <h2>Downloads</h2>
+            <div class="download-grid">
+                <a href="/download/{{ job.id }}/structure.pdb" class="download-card">
+                    <span class="download-icon">&#128196;</span>
+                    <span class="download-name">structure.pdb</span>
+                    <span class="download-desc">Predicted 3D structure</span>
+                </a>
+                <a href="/download/{{ job.id }}/visualization.pml" class="download-card">
+                    <span class="download-icon">&#127912;</span>
+                    <span class="download-name">visualization.pml</span>
+                    <span class="download-desc">PyMOL script (color by pLDDT)</span>
+                </a>
+                <a href="/view/{{ job.id }}" target="_blank" class="download-card">
+                    <span class="download-icon">&#128202;</span>
+                    <span class="download-name">View Report</span>
+                    <span class="download-desc">Open interactive 3D report</span>
+                </a>
+            </div>
+        </section>
+
+        <!-- How to Use -->
+        <section class="results-section">
+            <h2>Using Your Results</h2>
+            <div class="instructions">
+                <div class="instruction-step">
+                    <h3>1. Open in PyMOL</h3>
+                    <code>pymol visualization.pml</code>
+                    <p>Opens structure colored by pLDDT confidence (blue = high, red = low).</p>
+                </div>
+                <div class="instruction-step">
+                    <h3>2. Render high-quality image</h3>
+                    <code>ray 1200, 900; png output.png, dpi=300</code>
+                    <p>Run inside PyMOL for publication-quality rendering.</p>
+                </div>
+                <div class="instruction-step">
+                    <h3>3. Interpret confidence</h3>
+                    <p>Regions with pLDDT &gt;90 are highly reliable. Regions &lt;50 may be disordered or unreliable.</p>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <a href="/" class="btn-secondary">New Prediction</a>
+        </footer>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('plddtChart').getContext('2d');
+        const labels = {{ chart_labels | safe }};
+        const values = {{ chart_values | safe }};
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'pLDDT Score',
+                    data: values,
+                    borderColor: '#1a56db',
+                    backgroundColor: 'rgba(26, 86, 219, 0.08)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    annotation: {
+                        annotations: {
+                            line90: { type: 'line', yMin: 90, yMax: 90, borderColor: '#22c55e', borderDash: [5, 5], borderWidth: 1 },
+                            line70: { type: 'line', yMin: 70, yMax: 70, borderColor: '#eab308', borderDash: [5, 5], borderWidth: 1 },
+                            line50: { type: 'line', yMin: 50, yMax: 50, borderColor: '#ef4444', borderDash: [5, 5], borderWidth: 1 },
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Residue Position', font: { family: "'Space Grotesk', system-ui", weight: '500', size: 12 }, color: '#64748b' },
+                        ticks: { font: { family: "'Outfit', system-ui", size: 11 }, color: '#94a3b8' },
+                        grid: { color: '#f1f5f9' }
+                    },
+                    y: {
+                        title: { display: true, text: 'pLDDT Score', font: { family: "'Space Grotesk', system-ui", weight: '500', size: 12 }, color: '#64748b' },
+                        min: 0, max: 100,
+                        ticks: { font: { family: "'Outfit', system-ui", size: 11 }, color: '#94a3b8' },
+                        grid: { color: '#f1f5f9' }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

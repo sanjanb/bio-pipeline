@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediction Status — {{ job.job_name }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+            text-align: center;
+        }
+        .error-box {
+            background: #FBE9E7;
+            border: 2px solid #E65100;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            max-width: 500px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="loading-container">
+            {% if job.status.value == "failed" %}
+                <div class="error-box">
+                    <p style="font-weight:600; color:#E65100;">Prediction Failed</p>
+                    <pre style="font-size:0.85rem; margin-top:0.5rem;">{{ job.error }}</pre>
+                </div>
+                <a href="/" class="btn-secondary" style="margin-top:1rem;">Try Again</a>
+            {% else %}
+                <div class="pipeline-wrapper">
+                    <div class="pipeline" id="pipeline">
+                        <div class="pipeline-step" data-step="0">
+                            <div class="pipeline-node">
+                                <span class="step-icon">&#9679;</span>
+                                <span class="check-icon">&#10003;</span>
+                            </div>
+                            <div class="pipeline-label">Connecting to sequence database</div>
+                        </div>
+                        <div class="pipeline-connector"></div>
+
+                        <div class="pipeline-step" data-step="1">
+                            <div class="pipeline-node">
+                                <span class="step-icon">&#9679;</span>
+                                <span class="check-icon">&#10003;</span>
+                            </div>
+                            <div class="pipeline-label">Sequence found in database</div>
+                        </div>
+                        <div class="pipeline-connector"></div>
+
+                        <div class="pipeline-step" data-step="2">
+                            <div class="pipeline-node">
+                                <span class="step-icon">&#9679;</span>
+                                <span class="check-icon">&#10003;</span>
+                            </div>
+                            <div class="pipeline-label">Fetching predicted structure</div>
+                        </div>
+                        <div class="pipeline-connector"></div>
+
+                        <div class="pipeline-step" data-step="3">
+                            <div class="pipeline-node">
+                                <span class="step-icon">&#9679;</span>
+                                <span class="check-icon">&#10003;</span>
+                            </div>
+                            <div class="pipeline-label">Computing per-residue confidence</div>
+                        </div>
+                        <div class="pipeline-connector"></div>
+
+                        <div class="pipeline-step" data-step="4">
+                            <div class="pipeline-node">
+                                <span class="step-icon">&#9679;</span>
+                                <span class="check-icon">&#10003;</span>
+                            </div>
+                            <div class="pipeline-label">Generating 3D visualization</div>
+                        </div>
+                        <div class="pipeline-connector"></div>
+
+                        <div class="pipeline-step" data-step="5">
+                            <div class="pipeline-node">
+                                <span class="step-icon">&#9679;</span>
+                                <span class="check-icon">&#10003;</span>
+                            </div>
+                            <div class="pipeline-label">Report ready</div>
+                        </div>
+                    </div>
+
+                    <div class="pipeline-status-text" id="pipeline-status">Initializing...</div>
+
+                    <div class="pipeline-progress">
+                        <div class="pipeline-progress-bar" id="pipeline-progress-bar"></div>
+                    </div>
+                    <div class="pipeline-percentage" id="pipeline-percentage">0%</div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if job.status.value != "failed" %}
+    <script>
+        const jobId = "{{ job.id }}";
+        const initialStatus = "{{ job.status.value }}";
+
+        const stepLabels = [
+            "Connecting to sequence database",
+            "Sequence found in database",
+            "Fetching predicted structure",
+            "Computing per-residue confidence",
+            "Generating 3D visualization",
+            "Report ready"
+        ];
+
+        function getStepForStatus(status) {
+            switch (status) {
+                case "pending":   return 0;
+                case "submitted": return 1;
+                case "running":   return 2;
+                case "completed": return 6;
+                default:          return 0;
+            }
+        }
+
+        function updatePipeline(stepIndex) {
+            const pipelineSteps = document.querySelectorAll('.pipeline-step');
+            const connectors    = document.querySelectorAll('.pipeline-connector');
+            const statusText    = document.getElementById('pipeline-status');
+            const progressBar   = document.getElementById('pipeline-progress-bar');
+            const percentage    = document.getElementById('pipeline-percentage');
+
+            pipelineSteps.forEach(function(step, i) {
+                step.classList.remove('active', 'done');
+                if (i < stepIndex) {
+                    step.classList.add('done');
+                } else if (i === stepIndex && stepIndex < stepLabels.length) {
+                    step.classList.add('active');
+                }
+            });
+
+            connectors.forEach(function(conn, i) {
+                conn.classList.toggle('done', i < stepIndex);
+            });
+
+            if (stepIndex < stepLabels.length) {
+                statusText.textContent = stepLabels[stepIndex] + (stepIndex < stepLabels.length - 1 ? "..." : "");
+                statusText.classList.remove('complete');
+            } else {
+                statusText.textContent = "All steps complete!";
+                statusText.classList.add('complete');
+            }
+
+            var progress = Math.min(100, Math.round((stepIndex / stepLabels.length) * 100));
+            progressBar.style.width = progress + '%';
+            percentage.textContent = progress + '%';
+        }
+
+        // --- Initialize from server status ---
+        var currentStep = getStepForStatus(initialStatus);
+        updatePipeline(currentStep);
+
+        // --- Redirect on completed ---
+        if (initialStatus === "completed") {
+            updatePipeline(6);
+            setTimeout(function() {
+                window.location.href = "/result/" + jobId;
+            }, 1200);
+        }
+        // --- Simulate sub-step progression while running ---
+        else if (initialStatus === "running") {
+            var simStep = 2;
+            var simTimer = setInterval(function() {
+                if (simStep < 5) {
+                    simStep++;
+                    updatePipeline(simStep);
+                } else {
+                    clearInterval(simTimer);
+                }
+            }, 3500);
+        }
+
+        // --- Poll for live status (skip if already done or failed) ---
+        if (initialStatus !== "completed" && initialStatus !== "failed") {
+            var poll = setInterval(async function() {
+                try {
+                    var resp = await fetch("/api/status/" + jobId);
+                    var data = await resp.json();
+                    if (data.status === "completed") {
+                        clearInterval(poll);
+                        updatePipeline(6);
+                        setTimeout(function() {
+                            window.location.href = "/result/" + jobId;
+                        }, 1200);
+                    } else if (data.status === "failed") {
+                        clearInterval(poll);
+                        location.reload();
+                    }
+                } catch (e) {
+                    // retry next interval
+                }
+            }, 2000);
+        }
+    </script>
+    {% endif %}
+</body>
+</html>
