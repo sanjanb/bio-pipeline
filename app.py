@@ -68,6 +68,10 @@ async def predict(
     uniprot_id: str = Form(""),
     job_name: str = Form(""),
 ):
+    # Debug logging
+    import logging
+    logger = logging.getLogger("uvicorn.error")
+    logger.info(f"Predict request received: input_type={input_type}, uniprot_id={uniprot_id}, sequence_len={len(sequence)}, job_name={job_name}")
     # Route by input type
     if input_type == "uniprot":
         uniprot_id = uniprot_id.strip().upper()
