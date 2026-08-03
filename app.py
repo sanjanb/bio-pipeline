@@ -105,7 +105,7 @@ async def predict(
     return RedirectResponse(url=f"/status/{job_id}", status_code=303)
 
 
-@app.get("/status/{job_id}", response_class=HTMLResponse)
+@app.api_route("/status/{job_id}", methods=["GET","POST"], response_class=HTMLResponse)
 async def status(request: Request, job_id: str):
     # Log status request
     logger = logging.getLogger("uvicorn.error")
