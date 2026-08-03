@@ -11,7 +11,8 @@ dependencies = [
     "jinja2>=3.1.0",
     "httpx>=0.27.0",
     "python-multipart>=0.0.9",
-    "hatchling>=1.31.0"
+    "hatchling>=1.31.0",
+    "biopython = ^1.84"
 ]
 
 [build-system]
