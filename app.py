@@ -1,4 +1,5 @@
 """Structure Prediction Pipeline — FastAPI application."""
+import logging
 
 import json
 import re
@@ -106,6 +107,9 @@ async def predict(
 
 @app.get("/status/{job_id}", response_class=HTMLResponse)
 async def status(request: Request, job_id: str):
+    # Log status request
+    logger = logging.getLogger("uvicorn.error")
+    logger.info(f"Status check for job_id={job_id}")
     job = get_job(job_id)
     if not job:
         return templates.TemplateResponse(request, "index.html", {"error": "Job not found"})
