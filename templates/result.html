@@ -109,7 +109,7 @@
                             padding: 0 6px;
                             min-width: 2px;
                         " title="{{ domain.name }} ({{ domain.start }}-{{ domain.end }})">
-                            {% if (domain.end - domain.start) / sequence_length > 0.05 if sequence_length else false %}
+                            {% if sequence_length and (domain.end - domain.start) / sequence_length > 0.05 %}
                                 {{ domain.name }}
                             {% endif %}
                         </div>
