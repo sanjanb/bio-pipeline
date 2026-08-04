@@ -403,6 +403,86 @@ textarea:focus, input[type="text"]:focus {
 .badge-ncbi_cdd { background: #D1FAE5; color: #065F46; }
 .badge-interpro { background: #FEF3C7; color: #92400E; }
 
+/* ── Domain Track ── */
+.domain-track {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  margin: 1rem 0;
+}
+
+.domain-row {
+  position: relative;
+  height: 26px;
+  margin-bottom: 3px;
+}
+
+.domain-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 4px;
+  opacity: 0.5;
+}
+
+.domain-bar {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  min-width: 3px;
+  transition: filter 0.15s;
+}
+
+.domain-bar:hover {
+  filter: brightness(1.1);
+}
+
+.domain-bar-uniprot { background: var(--primary); }
+.domain-bar-ncbi { background: #10b981; }
+
+.domain-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-family: var(--font-heading);
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 6px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.domain-legend {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.domain-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.domain-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.domain-swatch-uniprot { background: var(--primary); }
+.domain-swatch-ncbi { background: #10b981; }
+
 /* Empty state */
 .empty-state {
   text-align: center;

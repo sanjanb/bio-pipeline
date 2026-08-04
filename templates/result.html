@@ -77,50 +77,33 @@
         <section class="results-section">
             <h2>Protein Domains</h2>
             <div class="domains-container">
-                {# Only show structural/functional domains in the track — skip interaction/disordered annotations #}
+                {# Only show structural/functional domains in the track — skip interaction/disordered/motif annotations #}
                 {% set track_domains = [] %}
                 {% for d in domains %}
-                    {% if d.name and d.start and d.end and (d.end - d.start) >= 5 and "Interaction with" not in d.name and "Disordered" not in d.name and "TADI" not in d.name and "TADII" not in d.name and "NLS" not in d.name and "NES" not in d.name and "motif" not in d.name|lower and "export" not in d.name|lower and "localization" not in d.name|lower %}
+                    {% set name_lower = d.name|lower %}
+                    {% if d.name and d.start and d.end and (d.end - d.start) >= 5 and "Interaction with" not in d.name and "Disordered" not in d.name and "TADI" not in d.name and "TADII" not in d.name and "NLS" not in d.name and "NES" not in d.name and "motif" not in name_lower and "export" not in name_lower and "localization" not in name_lower and "nuclear localization" not in name_lower %}
                         {% if track_domains.append(d) %}{% endif %}
                     {% endif %}
                 {% endfor %}
                 {% if track_domains %}
-                <div class="domain-track" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem; margin: 1rem 0;">
+                <div class="domain-track">
                     {% for domain in track_domains %}
-                    <div style="position: relative; height: 24px; margin-bottom: 4px;">
-                        <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #e2e8f0; border-radius: 4px;"></div>
-                        <div style="
-                            position: absolute;
-                            left: {{ (domain.start / sequence_length * 100) if sequence_length else 0 }}%;
-                            width: {{ ((domain.end - domain.start) / sequence_length * 100) if sequence_length else 1 }}%;
-                            height: 100%;
-                            background: {{ '#3b82f6' if domain.source == 'uniprot' else '#10b981' }};
-                            border-radius: 4px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 0.7rem;
-                            color: white;
-                            font-weight: 500;
-                            cursor: pointer;
-                            overflow: hidden;
-                            text-overflow: ellipsis;
-                            white-space: nowrap;
-                            padding: 0 6px;
-                            min-width: 2px;
-                        " title="{{ domain.name }} ({{ domain.start }}-{{ domain.end }})">
-                            {% if sequence_length and (domain.end - domain.start) / sequence_length > 0.05 %}
-                                {{ domain.name }}
+                    {% set bar_pct = ((domain.end - domain.start) / sequence_length * 100) if sequence_length else 1 %}
+                    {% set left_pct = (domain.start / sequence_length * 100) if sequence_length else 0 %}
+                    <div class="domain-row">
+                        <div class="domain-bg"></div>
+                        <div class="domain-bar {{ 'domain-bar-uniprot' if domain.source == 'uniprot' else 'domain-bar-ncbi' }}"
+                             style="left: {{ left_pct }}%; width: {{ bar_pct }}%;"
+                             title="{{ domain.name }} ({{ domain.start }}–{{ domain.end }})">
+                            {% if bar_pct > 8 %}
+                                <span class="domain-label">{{ domain.name }}</span>
                             {% endif %}
-                        </div>
-                        <div style="position: absolute; right: 0; top: 0; height: 100%; display: flex; align-items: center; font-size: 0.7rem; color: #64748b; padding-left: 6px; white-space: nowrap;">
-                            {{ domain.name }} ({{ domain.start }}–{{ domain.end }})
                         </div>
                     </div>
                     {% endfor %}
-                    <div style="margin-top: 0.5rem; display: flex; gap: 1rem; font-size: 0.75rem; color: var(--text-muted);">
-                        <span><span style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:2px;vertical-align:middle;"></span> UniProt</span>
-                        <span><span style="display:inline-block;width:10px;height:10px;background:#10b981;border-radius:2px;vertical-align:middle;"></span> NCBI CDD</span>
+                    <div class="domain-legend">
+                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-uniprot"></span> UniProt</span>
+                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-ncbi"></span> NCBI CDD</span>
                     </div>
                 </div>
                 {% endif %}
