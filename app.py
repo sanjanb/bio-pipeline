@@ -116,6 +116,17 @@ async def api_status(job_id: str):
     return {"status": job.status.value, "current_step": job.current_step, "job_id": job.id}
 
 
+@app.get("/api/pdb/{job_id}")
+async def api_pdb(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        return HTMLResponse("Job not found", status_code=404)
+    pdb_path = OUTPUT_DIR / f"{job_id}.pdb"
+    if not pdb_path.exists():
+        return HTMLResponse("PDB file not found", status_code=404)
+    return FileResponse(path=str(pdb_path), media_type="text/plain")
+
+
 @app.get("/result/{job_id}", response_class=HTMLResponse)
 async def result(request: Request, job_id: str):
     job = get_job(job_id)

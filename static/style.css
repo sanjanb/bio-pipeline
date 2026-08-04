@@ -696,6 +696,110 @@ textarea:focus, input[type="text"]:focus {
   border-top: 1px solid var(--border);
 }
 
+/* 3D Viewer */
+.viewer-wrapper {
+  position: relative;
+}
+
+.viewer-container {
+  width: 100%;
+  height: 450px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  position: relative;
+}
+
+.viewer-container .viewer-default-div {
+  width: 100%;
+  height: 100%;
+}
+
+.viewer-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: var(--surface);
+  z-index: 5;
+  transition: opacity 0.3s;
+}
+
+.viewer-loading.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.viewer-loading .spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.viewer-loading span {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.viewer-info-panel {
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  display: none;
+}
+
+.viewer-info-panel.visible {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.viewer-info-panel code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: var(--surface);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.viewer-info-panel .info-label {
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--font-heading);
+}
+
+.viewer-info-panel .info-plddt {
+  margin-left: auto;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+
+.viewer-info-panel .plddt-very-high { background: #DBEAFE; color: #1E40AF; }
+.viewer-info-panel .plddt-high { background: #E0F2FE; color: #0369A1; }
+.viewer-info-panel .plddt-low { background: #FEF9C3; color: #A16207; }
+.viewer-info-panel .plddt-very-low { background: #FEE2E2; color: #B91C1C; }
+
 /* Chart */
 .chart-container {
   height: 320px;
@@ -985,6 +1089,7 @@ textarea:focus, input[type="text"]:focus {
   .features { grid-template-columns: repeat(2, 1fr); }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .download-grid { grid-template-columns: 1fr; }
+  .viewer-container { height: 300px; }
   .page-header { flex-direction: column; gap: 0.5rem; align-items: flex-start; }
   .domain-track { padding: 1rem 0.75rem 0.75rem; }
   .domain-row { height: 28px; }

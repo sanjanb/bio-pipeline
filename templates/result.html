@@ -6,6 +6,7 @@
     <title>Results — {{ job.job_name }}</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -200,6 +201,24 @@
         </section>
         {% endif %}
 
+        <!-- 3D Structure Viewer -->
+        <section class="results-section">
+            <h2>3D Structure Viewer</h2>
+            <div class="viewer-wrapper">
+                <div id="viewer3d" class="viewer-container">
+                    <div class="viewer-loading" id="viewerLoading">
+                        <div class="spinner"></div>
+                        <span>Loading 3D structure…</span>
+                    </div>
+                </div>
+                <div class="viewer-info-panel" id="viewerInfo">
+                    <span><span class="info-label">Residue</span> <code id="infoResidue">—</code></span>
+                    <span><span class="info-label">Atom</span> <code id="infoAtom">—</code></span>
+                    <span class="info-plddt" id="infoPlddt"></span>
+                </div>
+            </div>
+        </section>
+
         <!-- Per-Residue Chart -->
         <section class="results-section">
             <h2>Per-Residue Confidence (pLDDT)</h2>
@@ -255,6 +274,71 @@
             <a href="/" class="btn-secondary">New Prediction</a>
         </footer>
     </div>
+
+    <script>
+        // 3Dmol viewer
+        (function() {
+            const jobId = '{{ job.id }}';
+            const plddtValues = {{ chart_values | safe }};
+            const loading = document.getElementById('viewerLoading');
+            const infoPanel = document.getElementById('viewerInfo');
+            const infoResidue = document.getElementById('infoResidue');
+            const infoAtom = document.getElementById('infoAtom');
+            const infoPlddt = document.getElementById('infoPlddt');
+
+            function plddtColor(score) {
+                if (score > 90) return '#2563eb';
+                if (score > 70) return '#0ea5e9';
+                if (score > 50) return '#eab308';
+                return '#ef4444';
+            }
+
+            function plddtClass(score) {
+                if (score > 90) return 'plddt-very-high';
+                if (score > 70) return 'plddt-high';
+                if (score > 50) return 'plddt-low';
+                return 'plddt-very-low';
+            }
+
+            fetch('/api/pdb/' + jobId)
+                .then(function(r) { return r.text(); })
+                .then(function(data) {
+                    var viewer = $3Dmol.createViewer(document.getElementById('viewer3d'), {
+                        backgroundColor: 'white',
+                        antialias: true
+                    });
+                    viewer.addModel(data, 'pdb');
+
+                    // Default grey for any residue without pLDDT data
+                    viewer.setStyle({}, { cartoon: { color: '#94a3b8' } });
+                    // Color each residue by pLDDT (last match wins per atom)
+                    for (var i = 0; i < plddtValues.length; i++) {
+                        viewer.setStyle({ resi: i + 1 }, {
+                            cartoon: { color: plddtColor(plddtValues[i]) }
+                        });
+                    }
+
+                    viewer.zoomTo();
+                    viewer.render();
+                    viewer.zoom(0.9);
+                    loading.classList.add('hidden');
+
+                    // Click-to-inspect
+                    viewer.setClickable({}, true, function(atom) {
+                        var resi = atom.resi;
+                        var plddt = plddtValues[resi - 1];
+                        infoResidue.textContent = atom.resn + ' ' + resi;
+                        infoAtom.textContent = atom.atom + ' (chain ' + atom.chain + ')';
+                        infoPlddt.textContent = 'pLDDT: ' + (plddt !== undefined ? plddt.toFixed(1) : '—');
+                        infoPlddt.className = 'info-plddt ' + (plddt !== undefined ? plddtClass(plddt) : '');
+                        infoPanel.classList.add('visible');
+                    });
+                })
+                .catch(function(err) {
+                    loading.innerHTML = '<span style="color:var(--conf-very-low)">Failed to load 3D structure</span>';
+                });
+        })();
+    </script>
 
     <script>
         const ctx = document.getElementById('plddtChart').getContext('2d');
