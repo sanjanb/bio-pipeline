@@ -1,7 +1,7 @@
 # Protein Intelligence Platform — Development Roadmap
 
 > **Goal:** Transform the current working prototype into a full Protein Research Workspace.
-> **Status:** Phase 0 complete (prototype with data-ingestion foundation).
+> **Status:** Phase 1 complete (canonical model, no mock PDB, improved identification).
 
 ---
 
@@ -103,16 +103,15 @@ UniProt → NCBI → Ensembl → BLAST → AlphaFold DB → PDB → pLDDT → Py
 
 ---
 
-### Phase 1 — Scientific Data Correctness
+### Phase 1 — Scientific Data Correctness ✅
 
 > Fix the data model and remove mock outputs.
 
-#### PIP-001: Canonical ProteinProfile Model
+#### PIP-001: Canonical ProteinProfile Model ✅
 
 **Priority:** Critical
 **Effort:** 1-2 days
-
-Create a unified data model that all sources populate:
+**Status:** Done — `models/protein.py` created with ProteinProfile, Domain, Variant, Homolog, Publication, StructureInfo dataclasses.
 
 ```python
 @dataclass
@@ -155,10 +154,11 @@ class ProteinProfile:
 
 ---
 
-#### PIP-002: Remove Mock PDB Generation
+#### PIP-002: Remove Mock PDB Generation ✅
 
 **Priority:** Critical
 **Effort:** 0.5 days
+**Status:** Done — `generate_mock_pdb()` removed from `app.py`. Structure unavailable is now explicit with clear messaging.
 
 Replace `generate_mock_pdb()` with explicit "structure unavailable" state.
 
@@ -179,10 +179,11 @@ if not structure_available:
 
 ---
 
-#### PIP-003: Improve FASTA → Protein Identification
+#### PIP-003: Improve FASTA → Protein Identification ✅
 
 **Priority:** High
 **Effort:** 1-2 days
+**Status:** Done — Re-enabled sequence input with `search_candidates()` in pipeline. UI has input type toggle (UniProt/Sequence).
 
 Current flow takes first UniProt match silently. Target:
 
