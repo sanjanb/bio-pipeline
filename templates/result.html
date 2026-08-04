@@ -210,11 +210,11 @@
                         <div class="spinner"></div>
                         <span>Loading 3D structure…</span>
                     </div>
-                </div>
-                <div class="viewer-info-panel" id="viewerInfo">
-                    <span><span class="info-label">Residue</span> <code id="infoResidue">—</code></span>
-                    <span><span class="info-label">Atom</span> <code id="infoAtom">—</code></span>
-                    <span class="info-plddt" id="infoPlddt"></span>
+                    <div class="viewer-info-bar" id="viewerInfo">
+                        <span class="info-chain" id="infoChain">—</span>
+                        <span class="info-residue-badge" id="infoResidue">—</span>
+                        <span class="info-plddt-badge" id="infoPlddt"></span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -282,12 +282,12 @@
             const plddtValues = {{ chart_values | safe }};
             const loading = document.getElementById('viewerLoading');
             const infoPanel = document.getElementById('viewerInfo');
+            const infoChain = document.getElementById('infoChain');
             const infoResidue = document.getElementById('infoResidue');
-            const infoAtom = document.getElementById('infoAtom');
             const infoPlddt = document.getElementById('infoPlddt');
 
             function plddtColor(score) {
-                if (score > 90) return '#2563eb';
+                if (score > 90) return '#1e40bf';
                 if (score > 70) return '#0ea5e9';
                 if (score > 50) return '#eab308';
                 return '#ef4444';
@@ -304,7 +304,7 @@
                 .then(function(r) { return r.text(); })
                 .then(function(data) {
                     var viewer = $3Dmol.createViewer(document.getElementById('viewer3d'), {
-                        backgroundColor: 'white',
+                        backgroundColor: '#0f0f23',
                         antialias: true,
                         id: 'viewer3d'
                     });
@@ -318,23 +318,73 @@
                     }
 
                     viewer.zoomTo();
-                    viewer.render();
 
-                    loading.classList.add('hidden');
-
-                    // Click-to-inspect via3Dmol's built-in picking
-                    model.setClickable({}, true, function(atom) {
+                    // Click-to-inspect
+                    var prevResi = null;
+                    viewer.setClickable({}, true, function(atom) {
+                        // Reset previous highlight
+                        if (prevResi !== null) {
+                            viewer.setStyle({ resi: prevResi }, {
+                                cartoon: { color: plddtColor(plddtValues[prevResi - 1]) }
+                            });
+                        }
                         var resi = atom.resi;
+
+                        // Highlight: element-colored sticks + thicker cartoon
+                        viewer.setStyle({ resi: resi }, {
+                            stick: { colorscheme: 'Jmol', radius: 0.14 },
+                            cartoon: { color: plddtColor(plddtValues[resi - 1]), thickness: 0.4 }
+                        });
+
+                        // Dashed hydrogen bond lines to nearby polar atoms
+                        // ponytail: try/catch for removeAllShapes — older 3Dmol may lack it
+                        try { viewer.removeAllShapes(); } catch(e) {}
+                        var polarAtoms = ['N', 'O', 'S', 'OG', 'OG1', 'OD1', 'OD2', 'OE1', 'OE2', 'NE', 'NE1', 'NE2', 'NZ', 'NH1', 'NH2', 'ND1', 'ND2', 'SG'];
+                        var selAtoms = model.selectedAtoms({resi: resi, atom: polarAtoms});
+                        var nearAtoms = model.selectedAtoms({atom: polarAtoms});
+                        var drawn = 0;
+                        for (var j = 0; j < selAtoms.length && drawn < 15; j++) {
+                            var a1 = selAtoms[j];
+                            for (var k = 0; k < nearAtoms.length && drawn < 15; k++) {
+                                var a2 = nearAtoms[k];
+                                if (a2.resi === resi || a2.serial <= a1.serial) continue;
+                                var dx = a1.x - a2.x, dy = a1.y - a2.y, dz = a1.z - a2.z;
+                                var dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                                if (dist > 1.0 && dist < 3.5) {
+                                    viewer.addCylinder({
+                                        start: {x: a1.x, y: a1.y, z: a1.z},
+                                        end: {x: a2.x, y: a2.y, z: a2.z},
+                                        radius: 0.04,
+                                        color: 'cyan',
+                                        dashed: true,
+                                        dashLength: 0.15,
+                                        gapLength: 0.1,
+                                        fromCap: 2,
+                                        toCap: 2,
+                                        opacity: 0.7
+                                    });
+                                    drawn++;
+                                }
+                            }
+                        }
+
+                        viewer.render();
+                        prevResi = resi;
+
+                        // Update info bar
                         var plddt = plddtValues[resi - 1];
+                        infoChain.textContent = 'Chain ' + atom.chain;
                         infoResidue.textContent = atom.resn + ' ' + resi;
-                        infoAtom.textContent = atom.atom + ' (chain ' + atom.chain + ')';
-                        infoPlddt.textContent = 'pLDDT: ' + (plddt !== undefined ? plddt.toFixed(1) : '—');
-                        infoPlddt.className = 'info-plddt ' + (plddt !== undefined ? plddtClass(plddt) : '');
+                        infoPlddt.textContent = plddt !== undefined ? plddt.toFixed(1) : '—';
+                        infoPlddt.className = 'info-plddt-badge ' + (plddt !== undefined ? plddtClass(plddt) : '');
                         infoPanel.classList.add('visible');
                     });
+
+                    viewer.render();  // render AFTER setClickable
+                    loading.classList.add('hidden');
                 })
                 .catch(function(err) {
-                    loading.innerHTML = '<span style="color:var(--conf-very-low)">Failed to load 3D structure</span>';
+                    loading.innerHTML = '<span style="color:#ef4444">Failed to load 3D structure</span>';
                 });
         })();
     </script>
