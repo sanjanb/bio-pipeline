@@ -204,7 +204,7 @@ def _run_prediction(job_id: str, input_value: str, job_name: str):
             generate_report(
                 job_name=job_name,
                 sequence=input_value,
-                analysis={"residues": [], "summary": {"total_residues": 0, "mean_plddt": 0}},
+                analysis={"residues": [], "total_residues": 0, "summary": {"total_residues": 0, "mean_plddt": 0}},
                 pdb_filename="",
                 pml_filename="",
                 output_path=report_path,
