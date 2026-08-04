@@ -41,7 +41,7 @@ def _build_profile(uniprot_data: dict | None) -> "ProteinProfile":
 
     # Extract domains from UniProt features
     for feat in uniprot_data.get("features", []):
-        if feat["type"] in ("Domain", "Region", "Family", "Repeat"):
+        if feat["type"] in ("Domain", "Region", "Family", "Repeat", "Motif"):
             profile.domains.append(Domain(
                 name=feat.get("description") or feat["type"],
                 source="uniprot",
@@ -156,6 +156,8 @@ async def gather_protein_data(
                     end = int(parts[-1])
                 except (ValueError, IndexError):
                     pass
+                if start == 0 and end == 0:
+                    continue  # Skip domains with unparseable locations
                 result["domains"].append({
                     "name": dom.get("description", "CDD domain"),
                     "source": "ncbi_cdd",

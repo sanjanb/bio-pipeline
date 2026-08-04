@@ -14,9 +14,9 @@ BASE_URL = "https://blast.ncbi.nlm.nih.gov/Blast.cgi"
 EMAIL = "platform@biotech.dev"
 TOOL = "protein-intelligence"
 
-# Rate limits: 10s between submits, poll 15s apart
+# Rate limits: 10s between submits, poll 30s apart (NCBI recommends 30-60s)
 _SUBMIT_DELAY = 10.0
-_POLL_INTERVAL = 15.0
+_POLL_INTERVAL = 30.0
 _last_submit = 0.0
 
 

@@ -129,11 +129,14 @@ async def result(request: Request, job_id: str):
     chart_values = summary.pop("values", [])
 
     # Parse enriched data for protein info, domains, BLAST
-    enriched = json.loads(job.enriched_data) if job.enriched_data else {}
+    try:
+        enriched = json.loads(job.enriched_data) if job.enriched_data else {}
+    except (json.JSONDecodeError, ValueError):
+        enriched = {}
     protein_info = enriched.get("protein_info")
     domains = enriched.get("domains", [])
     blast_hits = enriched.get("blast_results", [])
-    sequence_length = protein_info.get("sequence", {}).get("length", 0) if protein_info else 0
+    sequence_length = protein_info.get("sequence", {}).get("length", 0) if protein_info and protein_info.get("sequence") else 0
 
     return templates.TemplateResponse(request, "result.html", {
         "job": job, "summary": summary,

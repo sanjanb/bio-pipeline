@@ -40,7 +40,7 @@ def fetch_alphafold_structure(uniprot_id: str) -> dict | None:
                 "organism": entry.get("organismScientificName", "Unknown"),
                 "confidence": entry.get("latestVersion", 1),
                 "pae_url": pae_url,
-                "pdb AssemblyVersion": entry.get("pdbAccessoryIconUrl", ""),
+                "pdb_version": entry.get("latestVersion", 1),
             }
     except (httpx.HTTPError, Exception):
         return None
