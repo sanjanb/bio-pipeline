@@ -219,11 +219,11 @@ We found 3 possible proteins:
 
 ---
 
-### Phase 2 — Sequence & Domain Analysis
+### Phase 2 — Sequence & Domain Analysis ✅
 
 > Complete BLAST and domain visualization.
 
-#### PIP-004: Normalize Domain Annotations
+#### PIP-004: Normalize Domain Annotations ✅
 
 **Priority:** High
 **Effort:** 1-2 days
@@ -263,7 +263,7 @@ class Domain:
 
 ---
 
-#### PIP-005: Complete BLAST Normalization + UI
+#### PIP-005: Complete BLAST Normalization + UI ✅
 
 **Priority:** Medium
 **Effort:** 1-2 days
@@ -308,7 +308,7 @@ ABC3        Rat             91%        98%       0
 
 > Add PAE and browser-based 3D viewer.
 
-#### PIP-006: AlphaFold Structure Metadata + PAE
+#### PIP-006: AlphaFold Structure Metadata + PAE ✅ ✅
 
 **Priority:** High
 **Effort:** 1-2 days
@@ -748,12 +748,12 @@ User
 ## Recommended Sprint Order
 
 ```
-SPRINT 1 (Week 1-2)
+SPRINT 1 (Week 1-2) ✅
 ├── PIP-001: Canonical ProteinProfile model
 ├── PIP-002: Remove mock PDB
 └── PIP-003: Improve FASTA identification
 
-SPRINT 2 (Week 3-4)
+SPRINT 2 (Week 3-4) ✅
 ├── PIP-004: Normalize domain annotations
 ├── PIP-005: Complete BLAST normalization
 └── PIP-006: Structure metadata + PAE
