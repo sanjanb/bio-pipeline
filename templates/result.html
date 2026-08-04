@@ -77,7 +77,10 @@
         <section class="results-section">
             <h2>Protein Domains</h2>
             <div class="domains-container">
-                {# Only show structural/functional domains in the track — skip interaction/disordered/motif annotations #}
+                {# Classify domain type by name keywords #}
+                {% macro classify_domain_type(d) %}{% set nl = d.name|lower %}{% if 'zinc' in nl or 'znf' in nl or 'c2h2' in nl or 'c3hc4' in nl or 'ring finger' in nl or 'b-box' in nl %}zinc{% elif 'dna' in nl or 'helix-turn-helix' in nl or 'htH' in nl or 'homeobox' in nl or 'winged' in nl %}dna{% elif 'transcription' in nl or 'activation domain' in nl or 'tad' in nl or 'acidic activation' in nl %}transcription{% elif 'oligomer' in nl or 'coiled' in nl or 'leucine zipper' in nl or 'bzip' in nl or 'leucine-rich' in nl %}oligomerization{% elif 'kinase' in nl or 'phosphotransfer' in nl %}kinase{% elif 'binding' in nl or 'domain' in nl or 'repeat' in nl or 'family' in nl %}binding{% elif 'interaction' in nl %}interaction{% elif 'activ' in nl %}activation{% else %}default{% endif %}{% endmacro %}
+
+                {# Filter domains for track #}
                 {% set track_domains = [] %}
                 {% for d in domains %}
                     {% set name_lower = d.name|lower %}
@@ -85,46 +88,76 @@
                         {% if track_domains.append(d) %}{% endif %}
                     {% endif %}
                 {% endfor %}
+
                 {% if track_domains %}
                 <div class="domain-track">
-                    {% for domain in track_domains %}
-                    {% set bar_pct = ((domain.end - domain.start) / sequence_length * 100) if sequence_length else 1 %}
-                    {% set left_pct = (domain.start / sequence_length * 100) if sequence_length else 0 %}
-                    <div class="domain-row">
-                        <div class="domain-bg"></div>
-                        <div class="domain-bar {{ 'domain-bar-uniprot' if domain.source == 'uniprot' else 'domain-bar-ncbi' }}"
-                             style="left: {{ left_pct }}%; width: {{ bar_pct }}%;"
-                             title="{{ domain.name }} ({{ domain.start }}–{{ domain.end }})">
-                            {% if bar_pct > 8 %}
-                                <span class="domain-label">{{ domain.name }}</span>
-                            {% endif %}
-                        </div>
+                    {# Residue ruler #}
+                    {% set seq_len = sequence_length|default(100, true) %}
+                    <div class="domain-ruler">
+                        {% set ruler_step = (seq_len / 5)|round(0, 'floor')|int %}
+                        {% for i in range(0, seq_len + 1, ruler_step) %}
+                            {% set pos_pct = (i / seq_len * 100) if seq_len else 0 %}
+                            <div class="domain-ruler-tick tick-major" style="left: {{ pos_pct }}%;">
+                                <span class="domain-ruler-label">{{ i }}</span>
+                            </div>
+                        {% endfor %}
+                        <span class="domain-ruler-end">{{ seq_len }} aa</span>
                     </div>
-                    {% endfor %}
+
+                    {# Domain bars #}
+                    <div class="domain-rows">
+                        {% for domain in track_domains %}
+                        {% set bar_pct = ((domain.end - domain.start) / seq_len * 100) if seq_len else 1 %}
+                        {% set left_pct = (domain.start / seq_len * 100) if seq_len else 0 %}
+                        {% set d_type = classify_domain_type(domain) %}
+                        <div class="domain-row">
+                            <div class="domain-bg"></div>
+                            <div class="domain-bar domain-type-{{ d_type }}"
+                                 style="left: {{ left_pct }}%; width: {{ bar_pct }}%;"
+                                 title="{{ domain.name }} ({{ domain.start }}–{{ domain.end }})">
+                                {% if bar_pct > 10 %}
+                                    <span class="domain-label">{{ domain.name }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {# Legend — domain function types #}
                     <div class="domain-legend">
-                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-uniprot"></span> UniProt</span>
-                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-ncbi"></span> NCBI CDD</span>
+                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-dna"></span> DNA-binding</span>
+                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-zinc"></span> Zinc finger</span>
+                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-transcription"></span> Transcription</span>
+                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-oligomerization"></span> Oligomerization</span>
+                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-activation"></span> Activation</span>
+                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-binding"></span> Binding / Domain</span>
+                        <span class="domain-legend-item"><span class="domain-swatch domain-swatch-default"></span> Other</span>
                     </div>
                 </div>
                 {% endif %}
-                <table style="width: 100%; font-size: 0.85rem; margin-top: 1rem;">
+
+                {# Domain table #}
+                <table class="domain-table">
                     <thead>
-                        <tr style="border-bottom: 1px solid #e2e8f0;">
-                            <th style="text-align: left; padding: 0.5rem;">Domain</th>
-                            <th style="text-align: left; padding: 0.5rem;">Source</th>
-                            <th style="text-align: left; padding: 0.5rem;">Start</th>
-                            <th style="text-align: left; padding: 0.5rem;">End</th>
-                            <th style="text-align: left; padding: 0.5rem;">Length</th>
+                        <tr>
+                            <th>Domain</th>
+                            <th>Source</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Length</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for domain in domains %}
-                        <tr style="border-bottom: 1px solid #f1f5f9;">
-                            <td style="padding: 0.5rem;">{{ domain.name }}</td>
-                            <td style="padding: 0.5rem;"><span class="badge badge-{{ domain.source }}">{{ domain.source }}</span></td>
-                            <td style="padding: 0.5rem;">{{ domain.start }}</td>
-                            <td style="padding: 0.5rem;">{{ domain.end }}</td>
-                            <td style="padding: 0.5rem;">{{ domain.length }} aa</td>
+                        {% set d_type = classify_domain_type(domain) %}
+                        <tr>
+                            <td class="domain-name-cell">
+                                <span class="domain-type-dot domain-swatch-{{ d_type }}"></span>{{ domain.name }}
+                            </td>
+                            <td><span class="badge badge-{{ domain.source }}">{{ domain.source }}</span></td>
+                            <td>{{ domain.start }}</td>
+                            <td>{{ domain.end }}</td>
+                            <td>{{ domain.length }} aa</td>
                         </tr>
                         {% endfor %}
                     </tbody>
