@@ -175,18 +175,32 @@ def _run_prediction(job_id: str, input_value: str, job_name: str):
         job.current_step = 1
         update_job(job)
 
-        enriched = gather_protein_data_sync(uniprot_id=input_value)
+        # For sequence input, try to identify the protein first
+        uniprot_id = None
+        if not is_uniprot_id(input_value):
+            candidates = search_candidates_sync(input_value, limit=3)
+            if not candidates:
+                job.status = JobStatus.FAILED
+                job.error = "Could not identify this protein. Try a UniProt accession (e.g., P04637) instead."
+                update_job(job)
+                return
+            # Use best match
+            uniprot_id = candidates[0].get("accession")
+            logger.info("Identified protein as %s from sequence input", uniprot_id)
+
+        enriched = gather_protein_data_sync(uniprot_id=uniprot_id or input_value)
 
         # Step 2: Fetch AlphaFold structure
         job.current_step = 2
         update_job(job)
 
         structure_available = False
-        if is_uniprot_id(input_value):
-            data = fetch_alphafold_structure(input_value)
+        target_id = uniprot_id or input_value
+        if is_uniprot_id(target_id):
+            data = fetch_alphafold_structure(target_id)
             if data and data.get("pdb_url"):
                 download_structure(data["pdb_url"], pdb_path)
-                job.alphafold_job_id = data.get("entryId", input_value)
+                job.alphafold_job_id = data.get("entryId", target_id)
                 structure_available = True
 
         if not structure_available:
