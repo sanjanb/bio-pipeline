@@ -319,39 +319,101 @@
 
                     viewer.zoomTo();
 
-                    // Hover-to-inspect
+                    // --- Hover: pink outline only, no sticks ---
                     var hoveredResi = null;
+                    var clickedResi = null;
+
+                    function restoreResi(resi) {
+                        // Restore pLDDT cartoon, remove sticks
+                        viewer.setStyle({ resi: resi }, {
+                            cartoon: { color: plddtColor(plddtValues[resi - 1]) }
+                        });
+                    }
+
+                    function restoreClickedResi() {
+                        if (clickedResi !== null) {
+                            restoreResi(clickedResi);
+                            clickedResi = null;
+                        }
+                    }
+
                     viewer.setHoverable({}, true,
                         function(viewer) {
-                            // unhover: reset highlight, hide info
+                            // unhover: remove pink outline, restore pLDDT
                             if (hoveredResi !== null) {
-                                viewer.setStyle({ resi: hoveredResi }, {
-                                    cartoon: { color: plddtColor(plddtValues[hoveredResi - 1]) }
-                                });
+                                // If this residue is also the clicked one, restore clicked sticks
+                                if (hoveredResi === clickedResi) {
+                                    viewer.setStyle({ resi: hoveredResi }, {
+                                        stick: { colorscheme: 'Jmol', radius: 0.14 },
+                                        cartoon: { color: plddtColor(plddtValues[hoveredResi - 1]) }
+                                    });
+                                } else {
+                                    restoreResi(hoveredResi);
+                                }
                                 viewer.render();
                                 hoveredResi = null;
-                                infoPanel.classList.remove('visible');
                             }
                         },
                         function(atom) {
-                            // hover: highlight and show info
+                            // hover: add pink outline only
                             var resi = atom.resi;
+                            if (hoveredResi === resi) return;
 
-                            // Reset previous highlight
-                            if (hoveredResi !== null && hoveredResi !== resi) {
-                                viewer.setStyle({ resi: hoveredResi }, {
-                                    cartoon: { color: plddtColor(plddtValues[hoveredResi - 1]) }
+                            // Remove previous hover outline
+                            if (hoveredResi !== null) {
+                                if (hoveredResi === clickedResi) {
+                                    viewer.setStyle({ resi: hoveredResi }, {
+                                        stick: { colorscheme: 'Jmol', radius: 0.14 },
+                                        cartoon: { color: plddtColor(plddtValues[hoveredResi - 1]) }
+                                    });
+                                } else {
+                                    restoreResi(hoveredResi);
+                                }
+                            }
+
+                            // If this is the clicked residue, add pink outline on top of sticks
+                            if (resi === clickedResi) {
+                                viewer.setStyle({ resi: resi }, {
+                                    stick: { colorscheme: 'Jmol', radius: 0.14 },
+                                    cartoon: { color: 'hotpink' }
+                                });
+                            } else {
+                                // Pink outline on cartoon — subtle hover indicator
+                                viewer.setStyle({ resi: resi }, {
+                                    cartoon: { color: 'hotpink' }
                                 });
                             }
 
-                            // Highlight: sticks + thicker cartoon
-                            viewer.setStyle({ resi: resi }, {
-                                stick: { colorscheme: 'Jmol', radius: 0.14 },
-                                cartoon: { color: plddtColor(plddtValues[resi - 1]), thickness: 0.4 }
-                            });
-
                             viewer.render();
                             hoveredResi = resi;
+                        }
+                    );
+
+                    // --- Click: sticks with element colors + info bar ---
+                    viewer.setClickable({}, true,
+                        function(atom) {
+                            var resi = atom.resi;
+
+                            // If clicking the same residue, deselect
+                            if (clickedResi === resi) {
+                                restoreResi(resi);
+                                clickedResi = null;
+                                infoPanel.classList.remove('visible');
+                                viewer.render();
+                                return;
+                            }
+
+                            // Remove previous clicked sticks
+                            restoreClickedResi();
+
+                            // Apply element-colored sticks
+                            viewer.setStyle({ resi: resi }, {
+                                stick: { colorscheme: 'Jmol', radius: 0.14 },
+                                cartoon: { color: plddtColor(plddtValues[resi - 1]) }
+                            });
+
+                            clickedResi = resi;
+                            viewer.render();
 
                             // Update info bar
                             var plddt = plddtValues[resi - 1];
@@ -363,7 +425,7 @@
                         }
                     );
 
-                    viewer.render();  // render AFTER setHoverable — required by 3Dmol.js
+                    viewer.render();  // render AFTER setHoverable + setClickable — required by 3Dmol.js
                     loading.classList.add('hidden');
                 })
                 .catch(function(err) {
