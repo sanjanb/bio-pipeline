@@ -305,13 +305,12 @@
                 .then(function(data) {
                     var viewer = $3Dmol.createViewer(document.getElementById('viewer3d'), {
                         backgroundColor: 'white',
-                        antialias: true
+                        antialias: true,
+                        id: 'viewer3d'
                     });
                     viewer.addModel(data, 'pdb');
 
-                    // Default grey for any residue without pLDDT data
-                    viewer.setStyle({}, { cartoon: { color: '#94a3b8' } });
-                    // Color each residue by pLDDT (last match wins per atom)
+                    // Color each residue by pLDDT
                     for (var i = 0; i < plddtValues.length; i++) {
                         viewer.setStyle({ resi: i + 1 }, {
                             cartoon: { color: plddtColor(plddtValues[i]) }
@@ -320,18 +319,22 @@
 
                     viewer.zoomTo();
                     viewer.render();
-                    viewer.zoom(0.9);
+
                     loading.classList.add('hidden');
 
-                    // Click-to-inspect
-                    viewer.setClickable({}, true, function(atom) {
-                        var resi = atom.resi;
-                        var plddt = plddtValues[resi - 1];
-                        infoResidue.textContent = atom.resn + ' ' + resi;
-                        infoAtom.textContent = atom.atom + ' (chain ' + atom.chain + ')';
-                        infoPlddt.textContent = 'pLDDT: ' + (plddt !== undefined ? plddt.toFixed(1) : '—');
-                        infoPlddt.className = 'info-plddt ' + (plddt !== undefined ? plddtClass(plddt) : '');
-                        infoPanel.classList.add('visible');
+                    // Click-to-inspect using canvas event
+                    document.getElementById('viewer3d').addEventListener('click', function(e) {
+                        var picked = viewer.pick(e);
+                        if (picked && picked.atom) {
+                            var atom = picked.atom;
+                            var resi = atom.resi;
+                            var plddt = plddtValues[resi - 1];
+                            infoResidue.textContent = atom.resn + ' ' + resi;
+                            infoAtom.textContent = atom.atom + ' (chain ' + atom.chain + ')';
+                            infoPlddt.textContent = 'pLDDT: ' + (plddt !== undefined ? plddt.toFixed(1) : '—');
+                            infoPlddt.className = 'info-plddt ' + (plddt !== undefined ? plddtClass(plddt) : '');
+                            infoPanel.classList.add('visible');
+                        }
                     });
                 })
                 .catch(function(err) {
