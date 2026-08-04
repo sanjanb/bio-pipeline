@@ -304,7 +304,7 @@
                 .then(function(r) { return r.text(); })
                 .then(function(data) {
                     var viewer = $3Dmol.createViewer(document.getElementById('viewer3d'), {
-                        backgroundColor: '#0f0f23',
+                        backgroundColor: 'white',
                         antialias: true,
                         id: 'viewer3d'
                     });
@@ -319,68 +319,51 @@
 
                     viewer.zoomTo();
 
-                    // Click-to-inspect
-                    var prevResi = null;
-                    viewer.setClickable({}, true, function(atom) {
-                        // Reset previous highlight
-                        if (prevResi !== null) {
-                            viewer.setStyle({ resi: prevResi }, {
-                                cartoon: { color: plddtColor(plddtValues[prevResi - 1]) }
-                            });
-                        }
-                        var resi = atom.resi;
-
-                        // Highlight: element-colored sticks + thicker cartoon
-                        viewer.setStyle({ resi: resi }, {
-                            stick: { colorscheme: 'Jmol', radius: 0.14 },
-                            cartoon: { color: plddtColor(plddtValues[resi - 1]), thickness: 0.4 }
-                        });
-
-                        // Dashed hydrogen bond lines to nearby polar atoms
-                        // ponytail: try/catch for removeAllShapes — older 3Dmol may lack it
-                        try { viewer.removeAllShapes(); } catch(e) {}
-                        var polarAtoms = ['N', 'O', 'S', 'OG', 'OG1', 'OD1', 'OD2', 'OE1', 'OE2', 'NE', 'NE1', 'NE2', 'NZ', 'NH1', 'NH2', 'ND1', 'ND2', 'SG'];
-                        var selAtoms = model.selectedAtoms({resi: resi, atom: polarAtoms});
-                        var nearAtoms = model.selectedAtoms({atom: polarAtoms});
-                        var drawn = 0;
-                        for (var j = 0; j < selAtoms.length && drawn < 15; j++) {
-                            var a1 = selAtoms[j];
-                            for (var k = 0; k < nearAtoms.length && drawn < 15; k++) {
-                                var a2 = nearAtoms[k];
-                                if (a2.resi === resi || a2.serial <= a1.serial) continue;
-                                var dx = a1.x - a2.x, dy = a1.y - a2.y, dz = a1.z - a2.z;
-                                var dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-                                if (dist > 1.0 && dist < 3.5) {
-                                    viewer.addCylinder({
-                                        start: {x: a1.x, y: a1.y, z: a1.z},
-                                        end: {x: a2.x, y: a2.y, z: a2.z},
-                                        radius: 0.04,
-                                        color: 'cyan',
-                                        dashed: true,
-                                        dashLength: 0.15,
-                                        gapLength: 0.1,
-                                        fromCap: 2,
-                                        toCap: 2,
-                                        opacity: 0.7
-                                    });
-                                    drawn++;
-                                }
+                    // Hover-to-inspect
+                    var hoveredResi = null;
+                    viewer.setHoverable({}, true,
+                        function(viewer) {
+                            // unhover: reset highlight, hide info
+                            if (hoveredResi !== null) {
+                                viewer.setStyle({ resi: hoveredResi }, {
+                                    cartoon: { color: plddtColor(plddtValues[hoveredResi - 1]) }
+                                });
+                                viewer.render();
+                                hoveredResi = null;
+                                infoPanel.classList.remove('visible');
                             }
+                        },
+                        function(atom) {
+                            // hover: highlight and show info
+                            var resi = atom.resi;
+
+                            // Reset previous highlight
+                            if (hoveredResi !== null && hoveredResi !== resi) {
+                                viewer.setStyle({ resi: hoveredResi }, {
+                                    cartoon: { color: plddtColor(plddtValues[hoveredResi - 1]) }
+                                });
+                            }
+
+                            // Highlight: sticks + thicker cartoon
+                            viewer.setStyle({ resi: resi }, {
+                                stick: { colorscheme: 'Jmol', radius: 0.14 },
+                                cartoon: { color: plddtColor(plddtValues[resi - 1]), thickness: 0.4 }
+                            });
+
+                            viewer.render();
+                            hoveredResi = resi;
+
+                            // Update info bar
+                            var plddt = plddtValues[resi - 1];
+                            infoChain.textContent = 'Chain ' + atom.chain;
+                            infoResidue.textContent = atom.resn + ' ' + resi;
+                            infoPlddt.textContent = plddt !== undefined ? plddt.toFixed(1) : '—';
+                            infoPlddt.className = 'info-plddt-badge ' + (plddt !== undefined ? plddtClass(plddt) : '');
+                            infoPanel.classList.add('visible');
                         }
+                    );
 
-                        viewer.render();
-                        prevResi = resi;
-
-                        // Update info bar
-                        var plddt = plddtValues[resi - 1];
-                        infoChain.textContent = 'Chain ' + atom.chain;
-                        infoResidue.textContent = atom.resn + ' ' + resi;
-                        infoPlddt.textContent = plddt !== undefined ? plddt.toFixed(1) : '—';
-                        infoPlddt.className = 'info-plddt-badge ' + (plddt !== undefined ? plddtClass(plddt) : '');
-                        infoPanel.classList.add('visible');
-                    });
-
-                    viewer.render();  // render AFTER setClickable
+                    viewer.render();  // render AFTER setHoverable — required by 3Dmol.js
                     loading.classList.add('hidden');
                 })
                 .catch(function(err) {
