@@ -20,10 +20,10 @@ Protein Intelligence Platform is a web service that predicts protein 3D structur
 
 ```mermaid
 graph LR
-    A["🔬 User Input<br/>UniProt Accession"] --> B["🧬 AlphaFold DB<br/>Structure Lookup"]
-    B --> C["📊 PDB Analysis<br/>pLDDT Confidence"]
-    C --> D["🎨 PyMOL Script<br/>3D Visualization"]
-    D --> E["📄 HTML Report<br/>Charts &amp; Summary"]
+    A["User Input<br/>UniProt Accession"] --> B["AlphaFold DB<br/>Structure Lookup"]
+    B --> C["PDB Analysis<br/>pLDDT Confidence"]
+    C --> D["PyMOL Script<br/>3D Visualization"]
+    D --> E["HTML Report<br/>Charts &amp; Summary"]
 
     style A fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
     style B fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
@@ -40,13 +40,13 @@ The prediction pipeline progresses through **6 stages** with real-time status tr
 
 ```mermaid
 graph TD
-    S0["⏳ Step 0<br/>Initializing"] --> S1
-    S1["🔍 Step 1<br/>Connecting to<br/>sequence database"] --> S2
-    S2["✅ Step 2<br/>Sequence found<br/>in database"] --> S3
-    S3["⬇️ Step 3<br/>Fetching predicted<br/>structure"] --> S4
-    S4["📐 Step 4<br/>Computing per-residue<br/>confidence"] --> S5
-    S5["🎨 Step 5<br/>Generating 3D<br/>visualization"] --> S6
-    S6["🎉 Step 6<br/>Report ready"]
+    S0["Step 0<br/>Initializing"] --> S1
+    S1["Step 1<br/>Connecting to<br/>sequence database"] --> S2
+    S2["Step 2<br/>Sequence found<br/>in database"] --> S3
+    S3["Step 3<br/>Fetching predicted<br/>structure"] --> S4
+    S4["Step 4<br/>Computing per-residue<br/>confidence"] --> S5
+    S5["Step 5<br/>Generating 3D<br/>visualization"] --> S6
+    S6["Step 6<br/>Report ready"]
 
     style S0 fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
     style S1 fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
@@ -66,28 +66,28 @@ Each step is persisted to SQLite and polled by the frontend every 2 seconds, pro
 ```mermaid
 graph TB
     subgraph "Frontend"
-        UI["🌐 Web UI<br/>Jinja2 Templates"]
-        JS["⚡ JavaScript<br/>Polling &amp; Charts"]
+        UI["Web UI<br/>Jinja2 Templates"]
+        JS["JavaScript<br/>Polling &amp; Charts"]
     end
 
     subgraph "Backend"
-        API["🚀 FastAPI<br/>Async Endpoints"]
-        BG["🔄 Background Tasks<br/>Prediction Worker"]
+        API["FastAPI<br/>Async Endpoints"]
+        BG["Background Tasks<br/>Prediction Worker"]
     end
 
     subgraph "Data Sources"
-        AF["🧬 AlphaFold DB<br/>Structure Prediction"]
-        UN["📚 UniProt<br/>Protein Metadata"]
-        EN["🔗 Ensembl<br/>Gene &amp; Homology"]
-        NC["🏛️ NCBI<br/>Protein Records"]
-        PM["📰 PubMed<br/>Publications"]
+        AF["AlphaFold DB<br/>Structure Prediction"]
+        UN["UniProt<br/>Protein Metadata"]
+        EN["Ensembl<br/>Gene &amp; Homology"]
+        NC["NCBI<br/>Protein Records"]
+        PM["PubMed<br/>Publications"]
     end
 
     subgraph "Output"
-        PDB["📦 PDB File<br/>3D Structure"]
-        PML["🎨 PyMOL Script<br/>Visualization"]
-        RPT["📊 HTML Report<br/>Confidence Charts"]
-        DB["💾 SQLite<br/>Job Tracking"]
+        PDB["PDB File<br/>3D Structure"]
+        PML["PyMOL Script<br/>Visualization"]
+        RPT["HTML Report<br/>Confidence Charts"]
+        DB["SQLite<br/>Job Tracking"]
     end
 
     UI --> API
@@ -269,6 +269,6 @@ MIT
 
 <div align="center">
 
-**Built with [AlphaFold DB](https://alphafold.ebi.ac.uk) · [Biopython](https://biopython.org) · [FastAPI](https://fastapi.tiangolo.com) · [PyMOL](https://pymol.org)**
+**Built with [AlphaFold DB](https://alphafold.ebi.ac.uk) | [Biopython](https://biopython.org) | [FastAPI](https://fastapi.tiangolo.com) | [PyMOL](https://pymol.org)**
 
 </div>
