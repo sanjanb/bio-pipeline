@@ -122,7 +122,7 @@ async def api_status(job_id: str):
     job = get_job(job_id)
     if not job:
         return {"error": "not found"}
-    return {"status": job.status.value, "job_id": job.id}
+    return {"status": job.status.value, "current_step": job.current_step, "job_id": job.id}
 
 
 @app.get("/result/{job_id}", response_class=HTMLResponse)
@@ -184,35 +184,49 @@ def _run_prediction(job_id: str, input_value: str, job_name: str):
     try:
         pdb_path = str(OUTPUT_DIR / f"{job_id}.pdb")
 
-        # Step 1: Gather data from all sources
+        # Step 0-1: Gather data from all sources
+        job.current_step = 0
         job.status = JobStatus.SUBMITTED
+        update_job(job)
+
+        job.current_step = 1
         update_job(job)
 
         if is_uniprot_id(input_value):
             enriched = gather_protein_data_sync(uniprot_id=input_value)
-            # Fetch AlphaFold structure
+            # Step 2: Fetch AlphaFold structure
+            job.current_step = 2
+            update_job(job)
             data = fetch_alphafold_structure(input_value)
             if data and data.get("pdb_url"):
                 download_structure(data["pdb_url"], pdb_path)
                 job.alphafold_job_id = data.get("entryId", input_value)
         else:
             enriched = gather_protein_data_sync(sequence=input_value)
-            # Generate mock structure
+            # Step 2: Generate mock structure
+            job.current_step = 2
+            update_job(job)
             generate_mock_pdb(input_value, pdb_path)
 
         job.status = JobStatus.RUNNING
         update_job(job)
 
-        # Step 2: Parse structure
+        # Step 3: Parse structure
+        job.current_step = 3
+        update_job(job)
         analysis = parse_pdb(pdb_path)
         job.pdb_path = pdb_path
 
-        # Step 3: Generate PyMOL script
+        # Step 4: Generate PyMOL script
+        job.current_step = 4
+        update_job(job)
         pml_path = str(OUTPUT_DIR / f"{job_id}.pml")
         generate_pymol_script(pdb_path, pml_path, analysis["residues"])
         job.pml_path = pml_path
 
-        # Step 4: Generate report with enriched data
+        # Step 5: Generate report with enriched data
+        job.current_step = 5
+        update_job(job)
         report_path = str(OUTPUT_DIR / f"{job_id}_report.html")
         pdb_content = Path(pdb_path).read_text(encoding="utf-8")
         generate_report(
@@ -239,6 +253,7 @@ def _run_prediction(job_id: str, input_value: str, job_name: str):
         job.enriched_data = json.dumps(enriched, default=str)
 
         job.status = JobStatus.COMPLETED
+        job.current_step = 6
         update_job(job)
 
     except Exception as e:

@@ -29,6 +29,7 @@ class Job:
     pml_path: str = ""
     report_path: str = ""
     error: str = ""
+    current_step: int = 0
     confidence_summary: str = ""  # JSON string
     enriched_data: str = ""  # JSON string
     created_at: float = field(default_factory=time.time)
@@ -50,6 +51,7 @@ def _get_conn() -> sqlite3.Connection:
             pml_path TEXT DEFAULT '',
             report_path TEXT DEFAULT '',
             error TEXT DEFAULT '',
+            current_step INTEGER DEFAULT 0,
             confidence_summary TEXT DEFAULT '',
             enriched_data TEXT DEFAULT '',
             created_at REAL NOT NULL,
@@ -61,6 +63,10 @@ def _get_conn() -> sqlite3.Connection:
         conn.execute("ALTER TABLE jobs ADD COLUMN enriched_data TEXT DEFAULT ''")
     except sqlite3.OperationalError:
         pass  # Column already exists
+    try:
+        conn.execute("ALTER TABLE jobs ADD COLUMN current_step INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.commit()
     return conn
 
@@ -68,10 +74,10 @@ def _get_conn() -> sqlite3.Connection:
 def create_job(job: Job) -> Job:
     conn = _get_conn()
     conn.execute(
-        "INSERT INTO jobs (id, sequence, job_name, status, alphafold_job_id, "
+        "INSERT INTO jobs (id, sequence, job_name, status, current_step, alphafold_job_id, "
         "pdb_path, pml_path, report_path, error, confidence_summary, enriched_data, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (job.id, job.sequence, job.job_name, job.status.value,
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (job.id, job.sequence, job.job_name, job.status.value, job.current_step,
          job.alphafold_job_id, job.pdb_path, job.pml_path, job.report_path,
          job.error, job.confidence_summary, job.enriched_data, job.created_at, job.updated_at),
     )
@@ -84,9 +90,9 @@ def update_job(job: Job) -> Job:
     job.updated_at = time.time()
     conn = _get_conn()
     conn.execute(
-        "UPDATE jobs SET status=?, alphafold_job_id=?, pdb_path=?, pml_path=?, "
+        "UPDATE jobs SET status=?, current_step=?, alphafold_job_id=?, pdb_path=?, pml_path=?, "
         "report_path=?, error=?, confidence_summary=?, enriched_data=?, updated_at=? WHERE id=?",
-        (job.status.value, job.alphafold_job_id, job.pdb_path, job.pml_path,
+        (job.status.value, job.current_step, job.alphafold_job_id, job.pdb_path, job.pml_path,
          job.report_path, job.error, job.confidence_summary, job.enriched_data, job.updated_at, job.id),
     )
     conn.commit()
@@ -102,7 +108,8 @@ def get_job(job_id: str) -> Job | None:
         return None
     return Job(
         id=row["id"], sequence=row["sequence"], job_name=row["job_name"],
-        status=JobStatus(row["status"]), alphafold_job_id=row["alphafold_job_id"],
+        status=JobStatus(row["status"]), current_step=row["current_step"],
+        alphafold_job_id=row["alphafold_job_id"],
         pdb_path=row["pdb_path"], pml_path=row["pml_path"],
         report_path=row["report_path"], error=row["error"],
         confidence_summary=row["confidence_summary"],
@@ -121,7 +128,8 @@ def list_jobs(limit: int = 50, offset: int = 0) -> list[Job]:
     return [
         Job(
             id=r["id"], sequence=r["sequence"], job_name=r["job_name"],
-            status=JobStatus(r["status"]), alphafold_job_id=r["alphafold_job_id"],
+            status=JobStatus(r["status"]), current_step=r["current_step"],
+            alphafold_job_id=r["alphafold_job_id"],
             pdb_path=r["pdb_path"], pml_path=r["pml_path"],
             report_path=r["report_path"], error=r["error"],
             confidence_summary=r["confidence_summary"],

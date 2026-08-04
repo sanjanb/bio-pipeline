@@ -169,18 +169,6 @@
                 window.location.href = "/result/" + jobId;
             }, 1200);
         }
-        // --- Simulate sub-step progression while running ---
-        else if (initialStatus === "running") {
-            var simStep = 2;
-            var simTimer = setInterval(function() {
-                if (simStep < 5) {
-                    simStep++;
-                    updatePipeline(simStep);
-                } else {
-                    clearInterval(simTimer);
-                }
-            }, 3500);
-        }
 
         // --- Poll for live status (skip if already done or failed) ---
         if (initialStatus !== "completed" && initialStatus !== "failed") {
@@ -197,6 +185,8 @@
                     } else if (data.status === "failed") {
                         clearInterval(poll);
                         location.reload();
+                    } else if (data.current_step !== undefined) {
+                        updatePipeline(data.current_step);
                     }
                 } catch (e) {
                     // retry next interval

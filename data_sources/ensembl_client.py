@@ -25,8 +25,11 @@ async def _get_json(client: httpx.AsyncClient, path: str, params: dict | None = 
             return None
         resp.raise_for_status()
         return resp.json()
+    except httpx.HTTPStatusError as e:
+        logger.warning("Ensembl %s failed: %s %s", path, e.response.status_code, e.response.text[:200])
+        return None
     except httpx.HTTPError as e:
-        logger.warning("Ensembl %s failed: %s", path, e)
+        logger.warning("Ensembl %s failed: %s", path, type(e).__name__)
         return None
 
 

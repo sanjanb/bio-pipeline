@@ -33,25 +33,11 @@
                 <input type="text" id="job_name" name="job_name" placeholder="e.g., BRCA1 variant analysis">
             </div>
 
+            <input type="hidden" name="input_type" value="uniprot">
+
             <div class="form-group">
-                <label for="input_type">Input Type</label>
-                <select id="input_type" name="input_type" onchange="toggleInput()">
-                    <option value="sequence">Protein Sequence (raw amino acids)</option>
-                    <option value="uniprot">UniProt ID (fetch from AlphaFold DB)</option>
-                </select>
-            </div>
-
-            <div class="form-group" id="sequence-group" style="display:none">
-                <label for="sequence">Protein Sequence <span class="required">*</span></label>
-                <textarea id="sequence" name="sequence" rows="8"
-                    placeholder="Paste your amino acid sequence here...&#10;&#10;MKWVTFISLLFLFSSAYSARSVLC..."
-                    required minlength="10" maxlength="2700"></textarea>
-                <p class="help">Standard amino acid codes (ACDEFGHIKLMNPQRSTVWY). 10–2700 residues.</p>
-            </div>
-
-            <div class="form-group" id="uniprot-group">
                 <label for="uniprot_id">UniProt Accession <span class="required">*</span></label>
-                <input type="text" id="uniprot_id" name="uniprot_id" placeholder="e.g., P04637 (p53) or Q9Y6K9 (NEMO)"
+                <input type="text" id="uniprot_id" name="uniprot_id" placeholder="e.g., P04637 (p53) or Q9Y6K9 (NEMO)" required
                     pattern="[A-Z][A-Z0-9]{5,10}" title="UniProt accession: 6-11 alphanumeric chars">
                 <p class="help">Fetches pre-computed AlphaFold structure. Well-known proteins only.</p>
             </div>
@@ -116,14 +102,6 @@
         </footer>
     </div>
 
-    <script>
-    function toggleInput() {
-        var sel = document.getElementById('input_type').value;
-        document.getElementById('sequence-group').style.display = sel === 'sequence' ? '' : 'none';
-        document.getElementById('uniprot-group').style.display = sel === 'uniprot' ? '' : 'none';
-        document.getElementById('sequence').required = sel === 'sequence';
-        document.getElementById('uniprot_id').required = sel === 'uniprot';
-    }
-    </script>
+
 </body>
 </html>
