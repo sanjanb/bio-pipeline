@@ -1,4 +1,7 @@
-"""Async orchestrator for multi-source protein data gathering."""
+"""Async orchestrator for multi-source protein data gathering.
+
+Populates a canonical ProteinProfile from UniProt, NCBI, Ensembl, and PubMed.
+"""
 
 import asyncio
 import logging
@@ -16,6 +19,52 @@ from . import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _build_profile(uniprot_data: dict | None) -> "ProteinProfile":
+    """Convert raw UniProt dict into a ProteinProfile."""
+    from models.protein import ProteinProfile, Domain, Variant, Homolog, Publication
+
+    if not uniprot_data:
+        return ProteinProfile()
+
+    profile = ProteinProfile(
+        uniprot_id=uniprot_data.get("accession", ""),
+        protein_name=uniprot_data.get("protein_name", ""),
+        gene_symbol=uniprot_data.get("gene_names", [""])[0] if uniprot_data.get("gene_names") else "",
+        organism=uniprot_data.get("organism_name", ""),
+        sequence=uniprot_data.get("sequence", {}).get("value", ""),
+        length=uniprot_data.get("sequence", {}).get("length", 0),
+        molecular_weight=uniprot_data.get("sequence", {}).get("mol_weight"),
+        data_sources=["uniprot"],
+    )
+
+    # Extract domains from UniProt features
+    for feat in uniprot_data.get("features", []):
+        if feat["type"] in ("Domain", "Region", "Family", "Repeat"):
+            profile.domains.append(Domain(
+                name=feat.get("description") or feat["type"],
+                source="uniprot",
+                start=feat.get("location_start", 0) or 0,
+                end=feat.get("location_end", 0) or 0,
+            ))
+
+    return profile
+
+
+async def search_candidates(sequence: str, limit: int = 5) -> list[dict]:
+    """Search UniProt for candidate proteins matching a sequence.
+
+    Returns ranked list of {accession, protein_name, gene_names, organism_name, score}.
+    """
+    # Search by sequence fragment
+    query = f"sequence:{sequence[:30]}"
+    try:
+        matches = await search_uniprot(query, limit=limit)
+        return matches
+    except Exception as e:
+        logger.warning("Sequence search failed: %s", e)
+        return []
 
 
 async def gather_protein_data(
@@ -139,3 +188,8 @@ def gather_protein_data_sync(
 ) -> dict[str, Any]:
     """Synchronous wrapper for gather_protein_data."""
     return asyncio.run(gather_protein_data(uniprot_id=uniprot_id, sequence=sequence))
+
+
+def search_candidates_sync(sequence: str, limit: int = 5) -> list[dict]:
+    """Synchronous wrapper for search_candidates."""
+    return asyncio.run(search_candidates(sequence, limit))

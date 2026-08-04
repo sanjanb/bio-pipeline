@@ -1,8 +1,6 @@
-"""Structure Prediction Pipeline — FastAPI application."""
+"""Protein Intelligence Platform — FastAPI application."""
 import logging
-
 import json
-import re
 import uuid
 from pathlib import Path
 
@@ -12,26 +10,25 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from models import Job, JobStatus, create_job, update_job, get_job, list_jobs, job_count
-from alphafold_client import is_uniprot_id, fetch_alphafold_structure, download_structure, generate_mock_pdb, generate_mock_summary
+from alphafold_client import is_uniprot_id, fetch_alphafold_structure, download_structure
 from pdb_analyzer import parse_pdb
 from pymol_generator import generate_pymol_script
 from report_generator import generate_report
-from data_sources.pipeline import gather_protein_data_sync
+from data_sources.pipeline import gather_protein_data_sync, search_candidates_sync
 
-# ── Setup ────────────────────────────────────────────────────────────────────
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-app = FastAPI(title="Structure Prediction Pipeline", version="0.1.0")
+app = FastAPI(title="Protein Intelligence Platform", version="0.2.0")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
+logger = logging.getLogger("uvicorn.error")
 
 VALID_AMINO_ACIDS = set("ACDEFGHIKLMNPQRSTVWYX")
 
 
 def validate_sequence(seq: str) -> str | None:
-    """Return error message if invalid, None if OK."""
     clean = seq.replace(" ", "").replace("\n", "").replace("\r", "").upper()
     if not clean:
         return "Sequence is empty"
@@ -64,22 +61,20 @@ async def jobs(request: Request):
 async def predict(
     request: Request,
     background_tasks: BackgroundTasks,
-    input_type: str = Form("sequence"),
+    input_type: str = Form("uniprot"),
     sequence: str = Form(""),
     uniprot_id: str = Form(""),
     job_name: str = Form(""),
 ):
-    # Debug logging
-    import logging
-    logger = logging.getLogger("uvicorn.error")
-    logger.info(f"Predict request received: input_type={input_type}, uniprot_id={uniprot_id}, sequence_len={len(sequence)}, job_name={job_name}")
     # Route by input type
     if input_type == "uniprot":
         uniprot_id = uniprot_id.strip().upper()
         if not uniprot_id:
             return templates.TemplateResponse(request, "index.html", {"error": "UniProt ID is required"})
         if not is_uniprot_id(uniprot_id):
-            return templates.TemplateResponse(request, "index.html", {"error": f"Invalid UniProt accession: {uniprot_id}. Use format like P04637 or Q9Y6K9."})
+            return templates.TemplateResponse(request, "index.html", {
+                "error": f"Invalid UniProt accession: {uniprot_id}. Use format like P04637 or Q9Y6K9."
+            })
         input_value = uniprot_id
         job_sequence = f"UniProt:{uniprot_id}"
     else:
@@ -99,21 +94,15 @@ async def predict(
     )
     create_job(job)
 
-    # Kick off prediction in background
     background_tasks.add_task(_run_prediction, job_id, input_value, job.job_name)
-
     return RedirectResponse(url=f"/status/{job_id}", status_code=303)
 
 
-@app.api_route("/status/{job_id}", methods=["GET","POST"], response_class=HTMLResponse)
+@app.api_route("/status/{job_id}", methods=["GET", "POST"], response_class=HTMLResponse)
 async def status(request: Request, job_id: str):
-    # Log status request
-    logger = logging.getLogger("uvicorn.error")
-    logger.info(f"Status check for job_id={job_id}")
     job = get_job(job_id)
     if not job:
         return templates.TemplateResponse(request, "index.html", {"error": "Job not found"})
-
     return templates.TemplateResponse(request, "status.html", {"job": job})
 
 
@@ -156,7 +145,6 @@ async def download(job_id: str, filename: str):
     job = get_job(job_id)
     if not job:
         return HTMLResponse("Job not found", status_code=404)
-
     file_map = {
         "structure.pdb": job.pdb_path,
         "visualization.pml": job.pml_path,
@@ -165,18 +153,13 @@ async def download(job_id: str, filename: str):
     file_path = file_map.get(filename)
     if not file_path or not Path(file_path).exists():
         return HTMLResponse("File not found", status_code=404)
-
-    return FileResponse(
-        path=file_path,
-        filename=filename,
-        media_type="application/octet-stream",
-    )
+    return FileResponse(path=file_path, filename=filename, media_type="application/octet-stream")
 
 
 # ── Background worker ────────────────────────────────────────────────────────
 
 def _run_prediction(job_id: str, input_value: str, job_name: str):
-    """Fetch or generate structure, analyze, generate outputs."""
+    """Fetch structure, analyze, generate outputs. No mock PDB — structure unavailable is explicit."""
     job = get_job(job_id)
     if not job:
         return
@@ -192,21 +175,45 @@ def _run_prediction(job_id: str, input_value: str, job_name: str):
         job.current_step = 1
         update_job(job)
 
+        enriched = gather_protein_data_sync(uniprot_id=input_value)
+
+        # Step 2: Fetch AlphaFold structure
+        job.current_step = 2
+        update_job(job)
+
+        structure_available = False
         if is_uniprot_id(input_value):
-            enriched = gather_protein_data_sync(uniprot_id=input_value)
-            # Step 2: Fetch AlphaFold structure
-            job.current_step = 2
-            update_job(job)
             data = fetch_alphafold_structure(input_value)
             if data and data.get("pdb_url"):
                 download_structure(data["pdb_url"], pdb_path)
                 job.alphafold_job_id = data.get("entryId", input_value)
-        else:
-            enriched = gather_protein_data_sync(sequence=input_value)
-            # Step 2: Generate mock structure
-            job.current_step = 2
+                structure_available = True
+
+        if not structure_available:
+            # No mock — record explicit unavailable state
+            job.status = JobStatus.COMPLETED
+            job.current_step = 6
+            job.error = ""
+            # Store enriched data without structure
+            enriched["structure_status"] = "unavailable"
+            enriched["structure_note"] = "No AlphaFold DB structure available for this protein."
+            job.enriched_data = json.dumps(enriched, default=str)
+
+            # Generate a minimal report indicating no structure
+            report_path = str(OUTPUT_DIR / f"{job_id}_report.html")
+            generate_report(
+                job_name=job_name,
+                sequence=input_value,
+                analysis={"residues": [], "summary": {"total_residues": 0, "mean_plddt": 0}},
+                pdb_filename="",
+                pml_filename="",
+                output_path=report_path,
+                pdb_content="",
+                enriched_data=enriched,
+            )
+            job.report_path = report_path
             update_job(job)
-            generate_mock_pdb(input_value, pdb_path)
+            return
 
         job.status = JobStatus.RUNNING
         update_job(job)
@@ -224,7 +231,7 @@ def _run_prediction(job_id: str, input_value: str, job_name: str):
         generate_pymol_script(pdb_path, pml_path, analysis["residues"])
         job.pml_path = pml_path
 
-        # Step 5: Generate report with enriched data
+        # Step 5: Generate report
         job.current_step = 5
         update_job(job)
         report_path = str(OUTPUT_DIR / f"{job_id}_report.html")
@@ -237,19 +244,16 @@ def _run_prediction(job_id: str, input_value: str, job_name: str):
             pml_filename=f"{job_id}.pml",
             output_path=report_path,
             pdb_content=pdb_content,
-            enriched_data=enriched,  # NEW parameter
+            enriched_data=enriched,
         )
         job.report_path = report_path
 
-        # Chart data
         chart_data = {
             "labels": [r["residue"] for r in analysis["residues"]],
             "values": [r["plddt"] for r in analysis["residues"]],
         }
         summary_with_chart = {**analysis["summary"], **chart_data}
         job.confidence_summary = json.dumps(summary_with_chart)
-
-        # Store enriched data
         job.enriched_data = json.dumps(enriched, default=str)
 
         job.status = JobStatus.COMPLETED
