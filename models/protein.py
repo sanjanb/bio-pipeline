@@ -48,6 +48,28 @@ class Publication:
 
 
 @dataclass
+class BlastHit:
+    accession: str = ""
+    title: str = ""
+    organism: str = ""
+    identity: float | None = None
+    coverage: float | None = None
+    e_value: float | None = None
+    bit_score: float | None = None
+    alignment_length: int | None = None
+    gaps: int | None = None
+
+
+@dataclass
+class BlastAnalysis:
+    query_length: int = 0
+    database: str = ""
+    program: str = ""
+    hit_count: int = 0
+    hits: list[BlastHit] = field(default_factory=list)
+
+
+@dataclass
 class StructureInfo:
     available: bool = False
     source: str = ""            # "alphafold_db" | "unavailable"
@@ -55,6 +77,10 @@ class StructureInfo:
     mean_plddt: float | None = None
     confidence_distribution: dict = field(default_factory=dict)
     residue_count: int = 0
+    model_version: int | None = None
+    chains: list[str] = field(default_factory=list)
+    pae_url: str = ""
+    pae_available: bool = False
 
 
 @dataclass
@@ -82,6 +108,7 @@ class ProteinProfile:
     variants: list[Variant] = field(default_factory=list)
     homologs: list[Homolog] = field(default_factory=list)
     publications: list[Publication] = field(default_factory=list)
+    blast: BlastAnalysis | None = None
 
     # Metadata
     data_sources: list[str] = field(default_factory=list)

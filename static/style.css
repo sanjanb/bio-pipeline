@@ -387,6 +387,22 @@ textarea:focus, input[type="text"]:focus {
 .status-completed { background: #DCFCE7; color: #16A34A; }
 .status-failed { background: #FEE2E2; color: var(--status-failed); }
 
+/* Domain badges */
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-uniprot { background: #DBEAFE; color: #1E40AF; }
+.badge-ncbi_cdd { background: #D1FAE5; color: #065F46; }
+.badge-interpro { background: #FEF3C7; color: #92400E; }
+
 /* Empty state */
 .empty-state {
   text-align: center;

@@ -89,6 +89,7 @@ async def gather_protein_data(
         "homologs": None,
         "variants": None,
         "publications": None,
+        "domains": [],
         "errors": {},
     }
 
@@ -117,6 +118,16 @@ async def gather_protein_data(
     # 1. UniProt protein entry
     try:
         result["protein_info"] = await fetch_protein_entry(uniprot_id)
+        # Extract domain features from UniProt
+        if result["protein_info"]:
+            for feat in result["protein_info"].get("features", []):
+                if feat.get("type") in ("Domain", "Region", "Family", "Repeat", "Motif"):
+                    result["domains"].append({
+                        "name": feat.get("description") or feat.get("type", "Domain"),
+                        "source": "uniprot",
+                        "start": feat.get("location_start", 0) or 0,
+                        "end": feat.get("location_end", 0) or 0,
+                    })
     except Exception as e:
         logger.warning("fetch_protein_entry failed: %s", e)
         result["errors"]["fetch_protein_entry"] = str(e)
@@ -128,9 +139,29 @@ async def gather_protein_data(
         logger.warning("fetch_variants failed: %s", e)
         result["errors"]["fetch_variants"] = str(e)
 
-    # 3. NCBI protein record
+    # 3. NCBI protein record (includes CDD domains)
     try:
-        result["ncbi_record"] = await fetch_protein_record(uniprot_id)
+        ncbi_record = await fetch_protein_record(uniprot_id)
+        result["ncbi_record"] = ncbi_record
+        # Extract CDD domains from NCBI
+        if ncbi_record and ncbi_record.get("domains"):
+            for dom in ncbi_record["domains"]:
+                # Parse location string like "100..200" or "join(100..200)"
+                loc = dom.get("location", "")
+                start, end = 0, 0
+                try:
+                    loc_clean = loc.replace("join(", "").replace("complement(", "").rstrip(")")
+                    parts = loc_clean.split("..")
+                    start = int(parts[0])
+                    end = int(parts[-1])
+                except (ValueError, IndexError):
+                    pass
+                result["domains"].append({
+                    "name": dom.get("description", "CDD domain"),
+                    "source": "ncbi_cdd",
+                    "start": start,
+                    "end": end,
+                })
     except Exception as e:
         logger.warning("fetch_protein_record failed: %s", e)
         result["errors"]["fetch_protein_record"] = str(e)

@@ -32,12 +32,15 @@ def fetch_alphafold_structure(uniprot_id: str) -> dict | None:
                 return None
             entry = data[0] if isinstance(data, list) else data
             pdb_url = entry.get("pdbUrl") or entry.get("cifUrl", "")
+            pae_url = entry.get("paeImageUrl") or entry.get("paeDocUrl", "")
             return {
                 "uniprot_id": uniprot_id,
                 "pdb_url": pdb_url,
                 "gene": entry.get("gene", uniprot_id),
                 "organism": entry.get("organismScientificName", "Unknown"),
                 "confidence": entry.get("latestVersion", 1),
+                "pae_url": pae_url,
+                "pdb AssemblyVersion": entry.get("pdbAccessoryIconUrl", ""),
             }
     except (httpx.HTTPError, Exception):
         return None

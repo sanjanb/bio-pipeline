@@ -14,9 +14,9 @@ BASE_URL = "https://blast.ncbi.nlm.nih.gov/Blast.cgi"
 EMAIL = "platform@biotech.dev"
 TOOL = "protein-intelligence"
 
-# Rate limits: 10s between submits, poll 1min apart
+# Rate limits: 10s between submits, poll 15s apart
 _SUBMIT_DELAY = 10.0
-_POLL_INTERVAL = 60.0
+_POLL_INTERVAL = 15.0
 _last_submit = 0.0
 
 
@@ -68,7 +68,7 @@ async def submit_blast(sequence: str, database: str = "swissprot", program: str 
     return rid
 
 
-async def poll_blast(rid: str, timeout: int = 600) -> dict | None:
+async def poll_blast(rid: str, timeout: int = 120) -> dict | None:
     """Poll for BLAST results.
     
     GET ?CMD=Get&FORMAT_OBJECT=SearchInfo&RID={rid}
@@ -149,13 +149,15 @@ async def fetch_blast_results(rid: str, max_hits: int = 20) -> list[dict]:
                 desc = hit.get("description", [{}])[0]
                 hsp = hit.get("hsps", [{}])[0] if hit.get("hsps") else {}
 
+                align_len = hsp.get("align_len") or 1
+                identity = hsp.get("identity") or 0
                 results.append({
                     "accession": desc.get("accession", ""),
                     "title": desc.get("title", ""),
                     "score": hsp.get("bit_score"),
                     "e_value": hsp.get("evalue"),
-                    "percent_identity": hsp.get("identity"),
-                    "alignment_length": hsp.get("align_len"),
+                    "percent_identity": round(identity / align_len * 100, 1),
+                    "alignment_length": align_len,
                     "gaps": hsp.get("gaps"),
                     "query_coverage": hsp.get("query_cov"),
                 })

@@ -1,4 +1,5 @@
 """Protein Intelligence Platform — FastAPI application."""
+import asyncio
 import logging
 import json
 import uuid
@@ -15,6 +16,7 @@ from pdb_analyzer import parse_pdb
 from pymol_generator import generate_pymol_script
 from report_generator import generate_report
 from data_sources.pipeline import gather_protein_data_sync, search_candidates_sync
+from data_sources.blast_client import run_blast
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -125,9 +127,21 @@ async def result(request: Request, job_id: str):
     summary = json.loads(job.confidence_summary) if job.confidence_summary else {}
     chart_labels = summary.pop("labels", [])
     chart_values = summary.pop("values", [])
+
+    # Parse enriched data for protein info, domains, BLAST
+    enriched = json.loads(job.enriched_data) if job.enriched_data else {}
+    protein_info = enriched.get("protein_info")
+    domains = enriched.get("domains", [])
+    blast_hits = enriched.get("blast_results", [])
+    sequence_length = protein_info.get("sequence", {}).get("length", 0) if protein_info else 0
+
     return templates.TemplateResponse(request, "result.html", {
         "job": job, "summary": summary,
         "chart_labels": chart_labels, "chart_values": chart_values,
+        "protein_info": protein_info,
+        "domains": domains,
+        "blast_hits": blast_hits,
+        "sequence_length": sequence_length,
     })
 
 
@@ -202,6 +216,9 @@ def _run_prediction(job_id: str, input_value: str, job_name: str):
                 download_structure(data["pdb_url"], pdb_path)
                 job.alphafold_job_id = data.get("entryId", target_id)
                 structure_available = True
+                # Store PAE URL if available
+                if data.get("pae_url"):
+                    enriched["pae_url"] = data["pae_url"]
 
         if not structure_available:
             # No mock — record explicit unavailable state
@@ -237,6 +254,18 @@ def _run_prediction(job_id: str, input_value: str, job_name: str):
         update_job(job)
         analysis = parse_pdb(pdb_path)
         job.pdb_path = pdb_path
+
+        # Step 3.5: Run BLAST analysis (non-blocking, with timeout)
+        blast_results = []
+        try:
+            sequence = enriched.get("protein_info", {}).get("sequence", {}).get("value", "")
+            if sequence and len(sequence) >= 10:
+                logger.info("Running BLAST for %s", target_id)
+                blast_results = asyncio.run(run_blast(sequence, database="swissprot", max_hits=10))
+                enriched["blast_results"] = blast_results
+        except Exception as e:
+            logger.warning("BLAST failed (non-critical): %s", e)
+            enriched["blast_error"] = str(e)
 
         # Step 4: Generate PyMOL script
         job.current_step = 4
