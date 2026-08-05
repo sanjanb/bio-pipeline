@@ -842,3 +842,6 @@ Output:
 - Caching is already in place — expand aggressively
 - Keep every data source modular (no mixing)
 - The differentiator is research intelligence, not another protein pipeline
+
+
+// TODO: All dataclasses in models/protein.py (ProteinProfile, Domain, Variant, Homolog, Publication, BlastHit, BlastAnalysis, StructureInfo) are never instantiated in production -- pipeline uses raw dicts - why they are not used

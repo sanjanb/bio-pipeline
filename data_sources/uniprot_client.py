@@ -57,6 +57,8 @@ async def fetch_protein_entry(accession: str) -> dict | None:
     if data is None:
         return None
 
+    # Remove temporary debug logging (was checking comments structure)
+
     # Extract protein name
     protein_name = ""
     if "proteinDescription" in data:
@@ -126,14 +128,18 @@ async def fetch_protein_entry(accession: str) -> dict | None:
             for pathway in comment.get("pathways", []):
                 pathways.append(pathway.get("name", ""))
 
-    # Interactions
+    # Interactions — extract partner accession (not the query protein)
     interactions = []
     for comment in data.get("comments", []):
         if comment.get("commentType") == "INTERACTION":
             for interact in comment.get("interactions", []):
-                interact_id = interact.get("id", "")
-                if interact_id:
-                    interactions.append(interact_id)
+                one = interact.get("interactantOne", {})
+                two = interact.get("interactantTwo", {})
+                partner = two if one.get("uniProtKBAccession") == accession else one
+                partner_id = partner.get("uniProtKBAccession", "")
+                gene_name = partner.get("geneName", "")
+                if partner_id and partner_id != accession:
+                    interactions.append({"id": partner_id, "label": gene_name or partner_id})
 
     # Keywords
     keywords = [kw.get("value", "") for kw in data.get("keywords", [])]
@@ -158,51 +164,73 @@ async def fetch_protein_entry(accession: str) -> dict | None:
     }
 
 
+EBI_VARIATION_URL = "https://www.ebi.ac.uk/proteins/api/variation"
+
+
 async def fetch_variants(accession: str) -> list[dict]:
-    """Fetch known variants from UniProt Variation API.
-    
-    GET /variation/human/{accession} (returns JSON with features array)
+    """Fetch known variants from EBI Proteins Variation API.
+
+    GET https://www.ebi.ac.uk/proteins/api/variation/{accession}
     Returns list of {position, wild_type, alternative_sequence, descriptions, frequency, disease_associations}
     Note: this endpoint only works for human proteins; return empty list for non-human.
     """
-    async with httpx.AsyncClient(timeout=30) as client:
-        data = await _get_json(client, f"/variation/human/{accession}")
-    if data is None:
-        return []
+    async with httpx.AsyncClient(timeout=60) as client:
+        await _rate_limit()
+        try:
+            resp = await client.get(f"{EBI_VARIATION_URL}/{accession}")
+            if resp.status_code == 404:
+                return []
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception:
+            return []
 
     variants = []
     for feat in data.get("features", []):
-        location = feat.get("location", {})
-        start = location.get("start", {}).get("value")
-        end = location.get("end", {}).get("value")
-        position = start if start == end else f"{start}-{end}"
+        if feat.get("type") != "VARIANT":
+            continue
 
+        # EBI format: begin/end are strings, not nested objects
+        begin = feat.get("begin")
+        end = feat.get("end")
+        if begin is None:
+            continue
+        position = begin if begin == end else f"{begin}-{end}"
+
+        # Description from naturalAlleleFrequency or descriptions
         descriptions = []
         for desc in feat.get("descriptions", []):
-            descriptions.append(desc.get("value", ""))
+            val = desc.get("value", "")
+            if val:
+                descriptions.append(val)
 
-        # Alternative sequences
-        alt_seqs = []
-        for alt in feat.get("alternativeSequences", []):
-            alt_seqs.append(alt.get("sequence", ""))
+        # Wild type and alternative sequence
+        wild_type = feat.get("wildType", "")
+        alternative_sequence = feat.get("alternativeSequence", "")
 
-        # Frequency
+        # Frequency from populationFrequencies array
         frequency = None
-        for prop in feat.get("properties", []):
-            if prop.get("key") == "Frequency":
-                frequency = prop.get("value")
+        for pop in feat.get("populationFrequencies", []):
+            freq_val = pop.get("frequency")
+            if freq_val is not None:
+                frequency = str(freq_val)
                 break
 
-        # Disease associations
+        # Disease associations from association[] and clinicalSignificances
         diseases = []
-        for xref in feat.get("crossReferences", []):
-            if xref.get("database") in ("ClinVar", "OMIM", "Orphanet"):
-                diseases.append({"database": xref.get("database"), "id": xref.get("id")})
+        for assoc in feat.get("association", []):
+            diseases.append({"database": "disease", "id": assoc.get("name", "")})
+        for cs in feat.get("clinicalSignificances", []):
+            diseases.append({"database": "clinical", "id": cs.get("type", "")})
+        for xref in feat.get("xrefs", []):
+            db = xref.get("name", "")
+            if db in ("ClinVar", "OMIM", "Orphanet"):
+                diseases.append({"database": db, "id": xref.get("id", "")})
 
         variants.append({
             "position": position,
-            "wild_type": feat.get("wildType", ""),
-            "alternative_sequence": alt_seqs[0] if alt_seqs else "",
+            "wild_type": wild_type,
+            "alternative_sequence": alternative_sequence,
             "descriptions": descriptions,
             "frequency": frequency,
             "disease_associations": diseases,

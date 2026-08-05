@@ -2,8 +2,9 @@
 
 import asyncio
 import logging
+import re
+from datetime import datetime
 import xml.etree.ElementTree as ET
-from typing import Any
 
 import httpx
 
@@ -225,10 +226,10 @@ async def fetch_gene_from_protein(protein_accession: str) -> dict | None:
     return result
 
 
-async def search_pubmed(query: str, max_results: int = 10) -> list[dict]:
+async def search_pubmed(query: str, max_results: int = 10, protein_name: str = "") -> list[dict]:
     """Search PubMed.
     
-    Returns list of {pmid, title, authors, journal, year, doi}.
+    Returns list of {pmid, title, authors, journal, year, doi, relevance_score}.
     """
     async with httpx.AsyncClient(timeout=30) as client:
         root = await _get_xml(client, "esearch.fcgi", {
@@ -250,11 +251,11 @@ async def search_pubmed(query: str, max_results: int = 10) -> list[dict]:
     if not pmids:
         return []
 
-    return await fetch_pubmed_details(pmids)
+    return await fetch_pubmed_details(pmids, protein_name=protein_name)
 
 
-async def fetch_pubmed_details(pmids: list[str]) -> list[dict]:
-    """Fetch full details for a list of PMIDs."""
+async def fetch_pubmed_details(pmids: list[str], protein_name: str = "") -> list[dict]:
+    """Fetch full details for a list of PMIDs with relevance scoring."""
     if not pmids:
         return []
 
@@ -318,5 +319,43 @@ async def fetch_pubmed_details(pmids: list[str]) -> list[dict]:
                 "journal": journal,
                 "year": year,
                 "doi": doi,
+                "relevance_score": _score_relevance(title, journal, year, protein_name),
             })
+
+    results.sort(key=lambda x: x["relevance_score"], reverse=True)
     return results
+
+
+# High-impact journals for relevance scoring
+_HIGH_IMPACT_JOURNALS = {
+    "nature", "science", "cell", "the new england journal of medicine",
+    "the lancet", "proceedings of the national academy of sciences",
+    "pnas", "molecular cell", "nature genetics", "nature medicine",
+    "cell reports", "journal of the american chemical society",
+}
+
+_MUTATION_TERMS = ("mutation", "variant", "pathogenic", "deleterious",
+                   "loss-of-function", "gain-of-function")
+
+
+def _score_relevance(title: str, journal: str, year: str | None, protein_name: str) -> float:
+    """Score publication relevance 0-1 based on protein specificity and recency."""
+    score = 0.3  # base
+    title_lower = title.lower()
+    if protein_name and protein_name.lower() in title_lower:
+        score += 0.25
+    # Recency: within last 5 years
+    if year:
+        try:
+            if int(year) >= datetime.now().year - 5:
+                score += 0.15
+        except ValueError:
+            pass
+    # High-impact journal
+    journal_lower = journal.lower()
+    if any(re.search(rf"\b{re.escape(hj)}\b", journal_lower) for hj in _HIGH_IMPACT_JOURNALS):
+        score += 0.15
+    # Mutation/disease terms in title
+    if any(t in title_lower for t in _MUTATION_TERMS):
+        score += 0.15
+    return min(score, 1.0)

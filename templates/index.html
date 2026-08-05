@@ -44,7 +44,7 @@
             <div class="form-group" id="uniprot-group">
                 <label for="uniprot_id">UniProt Accession <span class="required">*</span></label>
                 <input type="text" id="uniprot_id" name="uniprot_id" placeholder="e.g., P04637 (p53) or Q9Y6K9 (NEMO)"
-                    pattern="[A-Z][A-Z0-9]{5,10}" title="UniProt accession: 6-11 alphanumeric chars">
+                    pattern="[A-Z][A-Z0-9]{5,10}" title="UniProt accession: 6-11 alphanumeric chars" required>
                 <p class="help">Fetches pre-computed AlphaFold structure. Well-known proteins only.</p>
             </div>
 
@@ -124,6 +124,7 @@
         document.getElementById('sequence').required = sel === 'sequence';
         document.getElementById('uniprot_id').required = sel === 'uniprot';
     }
+    toggleInput();
     </script>
 </body>
 </html>

@@ -5,6 +5,7 @@ Populates a canonical ProteinProfile from UniProt, NCBI, Ensembl, and PubMed.
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from . import (
@@ -91,6 +92,7 @@ async def gather_protein_data(
         "publications": None,
         "domains": [],
         "errors": {},
+        "provenance": {},
     }
 
     # If only sequence provided, try to find UniProt accession
@@ -131,6 +133,9 @@ async def gather_protein_data(
     except Exception as e:
         logger.warning("fetch_protein_entry failed: %s", e)
         result["errors"]["fetch_protein_entry"] = str(e)
+    else:
+        if result["protein_info"]:
+            result["provenance"]["protein_info"] = {"source": "uniprot", "source_id": uniprot_id, "retrieved_at": time.time()}
 
     # 2. UniProt variants (human only)
     try:
@@ -138,6 +143,9 @@ async def gather_protein_data(
     except Exception as e:
         logger.warning("fetch_variants failed: %s", e)
         result["errors"]["fetch_variants"] = str(e)
+    else:
+        if result["variants"]:
+            result["provenance"]["variants"] = {"source": "uniprot_variation", "source_id": uniprot_id, "retrieved_at": time.time()}
 
     # 3. NCBI protein record (includes CDD domains)
     try:
@@ -167,6 +175,9 @@ async def gather_protein_data(
     except Exception as e:
         logger.warning("fetch_protein_record failed: %s", e)
         result["errors"]["fetch_protein_record"] = str(e)
+    else:
+        if result["ncbi_record"]:
+            result["provenance"]["ncbi_record"] = {"source": "ncbi", "source_id": uniprot_id, "retrieved_at": time.time()}
 
     # 4. NCBI gene info from protein
     try:
@@ -174,6 +185,9 @@ async def gather_protein_data(
     except Exception as e:
         logger.warning("fetch_gene_from_protein failed: %s", e)
         result["errors"]["fetch_gene_from_protein"] = str(e)
+    else:
+        if result["gene_info"]:
+            result["provenance"]["gene_info"] = {"source": "ncbi_gene", "source_id": uniprot_id, "retrieved_at": time.time()}
 
     # 5. Ensembl gene lookup + homology
     gene_symbol = None
@@ -193,24 +207,40 @@ async def gather_protein_data(
         except Exception as e:
             logger.warning("Ensembl lookup/homology failed: %s", e)
             result["errors"]["ensembl"] = str(e)
+        else:
+            if result["ensembl_gene"]:
+                result["provenance"]["ensembl_gene"] = {"source": "ensembl", "source_id": gene_symbol, "retrieved_at": time.time()}
+            if result["homologs"]:
+                result["provenance"]["homologs"] = {"source": "ensembl_homology", "source_id": gene_symbol, "retrieved_at": time.time()}
 
-    # 6. PubMed search
+    # 6. PubMed search (expanded query for better relevance)
     search_terms = []
+    protein_name = ""
     if result["protein_info"]:
-        if result["protein_info"].get("protein_name"):
-            search_terms.append(result["protein_info"]["protein_name"])
+        protein_name = result["protein_info"].get("protein_name", "")
+        if protein_name:
+            search_terms.append(protein_name)
         if result["protein_info"].get("gene_names"):
             search_terms.append(result["protein_info"]["gene_names"][0])
         if result["protein_info"].get("organism_name"):
             search_terms.append(result["protein_info"]["organism_name"])
+        # Add mutation/variant terms if variants exist
+        variants = result.get("variants", [])
+        if variants:
+            search_terms.append("mutation variant")
 
     if search_terms:
         query = " ".join(search_terms)
         try:
-            result["publications"] = await search_pubmed(query, max_results=10)
+            result["publications"] = await search_pubmed(
+                query, max_results=15, protein_name=protein_name
+            )
         except Exception as e:
             logger.warning("search_pubmed failed: %s", e)
             result["errors"]["search_pubmed"] = str(e)
+        else:
+            if result["publications"]:
+                result["provenance"]["publications"] = {"source": "pubmed", "source_id": query, "retrieved_at": time.time()}
 
     return result
 

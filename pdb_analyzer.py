@@ -5,15 +5,6 @@ from Bio.PDB import PDBParser
 from Bio.PDB.DSSP import DSSP
 
 
-# pLDDT b-factor columns (AlphaFold convention)
-PLDDT_THRESHOLDS = {
-    "very_high": 90,  # pLDDT > 90: confident
-    "high": 70,       # 70 < pLDDT <= 90: confident
-    "low": 50,        # 50 < pLDDT <= 70: low confidence
-    "very_low": 0,    # pLDDT <= 50: very low / disordered
-}
-
-
 def parse_pdb(pdb_path: str) -> dict:
     """Parse PDB and extract per-residue pLDDT scores and summary stats."""
     parser = PDBParser(QUIET=True)

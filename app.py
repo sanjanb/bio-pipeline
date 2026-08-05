@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import json
+import time
 import uuid
 from pathlib import Path
 
@@ -155,7 +156,11 @@ async def result(request: Request, job_id: str):
         "protein_info": protein_info,
         "domains": domains,
         "blast_hits": blast_hits,
+        "variants": enriched.get("variants", []),
+        "publications": enriched.get("publications", []),
         "sequence_length": sequence_length,
+        "structure_status": enriched.get("structure_status", "available"),
+        "provenance": enriched.get("provenance", {}),
     })
 
 
@@ -277,6 +282,9 @@ def _run_prediction(job_id: str, input_value: str, job_name: str):
                 logger.info("Running BLAST for %s", target_id)
                 blast_results = asyncio.run(run_blast(sequence, database="swissprot", max_hits=10))
                 enriched["blast_results"] = blast_results
+                if "provenance" not in enriched:
+                    enriched["provenance"] = {}
+                enriched["provenance"]["blast_results"] = {"source": "blast_swissprot", "source_id": "swissprot", "retrieved_at": time.time()}
         except Exception as e:
             logger.warning("BLAST failed (non-critical): %s", e)
             enriched["blast_error"] = str(e)

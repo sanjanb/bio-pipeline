@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -201,7 +202,53 @@
         </section>
         {% endif %}
 
+        <!-- Known Variants -->
+        {% if variants %}
+        <section class="results-section">
+            <h2>Known Variants</h2>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e2e8f0;">
+                            <th style="text-align: left; padding: 0.5rem;">Position</th>
+                            <th style="text-align: left; padding: 0.5rem;">Change</th>
+                            <th style="text-align: left; padding: 0.5rem;">Description</th>
+                            <th style="text-align: right; padding: 0.5rem;">Frequency</th>
+                            <th style="text-align: left; padding: 0.5rem;">Disease Links</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in variants[:50] %}
+                        {% set pos_num = v.position.split('-')[0] if v.position else '0' %}
+                        <tr class="variant-row" data-position="{{ pos_num }}" style="cursor:pointer; border-bottom: 1px solid #f1f5f9;">
+                            <td style="padding: 0.5rem; font-family: var(--font-mono); font-weight: 600;">{{ v.position }}</td>
+                            <td style="padding: 0.5rem; font-family: var(--font-mono);">{{ v.wild_type }} → {{ v.alternative_sequence }}</td>
+                            <td style="padding: 0.5rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ (v.descriptions | join(', ') if v.descriptions else '—')[:80] }}</td>
+                            <td style="padding: 0.5rem; text-align: right;">{{ v.frequency or '—' }}</td>
+                            <td style="padding: 0.5rem;">
+                                {% if v.disease_associations %}
+                                    {% for da in v.disease_associations %}
+                                        <span class="badge badge-uniprot" style="margin-right: 0.25rem; font-size: 0.65rem;">{{ da.database }}:{{ da.id }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if variants|length > 50 %}
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">
+                Showing first 50 of {{ variants|length }} variants.
+            </p>
+            {% endif %}
+        </section>
+        {% endif %}
+
         <!-- 3D Structure Viewer -->
+        {% if structure_status != 'unavailable' %}
         <section class="results-section">
             <h2>3D Structure Viewer</h2>
             <div class="viewer-wrapper">
@@ -218,6 +265,12 @@
                 </div>
             </div>
         </section>
+        {% else %}
+        <section class="results-section">
+            <h2>3D Structure</h2>
+            <p style="color: var(--text-secondary);">No AlphaFold structure available for this protein.</p>
+        </section>
+        {% endif %}
 
         <!-- Per-Residue Chart -->
         <section class="results-section">
@@ -249,6 +302,57 @@
             </div>
         </section>
 
+        <!-- Interaction Network -->
+        {% if protein_info and protein_info.interactions %}
+        <section class="results-section">
+            <h2>Interaction Network</h2>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                Known protein interactions from UniProt. Click a node for details.
+            </p>
+            <div id="cy" style="width: 100%; height: 400px; border: 1px solid var(--border-color); border-radius: 8px; background: #fafbfc;"></div>
+        </section>
+        {% endif %}
+
+        <!-- Publications -->
+        {% if publications %}
+        <section class="results-section">
+            <h2>Publications</h2>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                PubMed results ranked by relevance to this protein.
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                {% for pub in publications[:15] %}
+                <div style="padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        {% if pub.relevance_score is defined and pub.relevance_score is not none %}
+                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50;
+                        {% if pub.relevance_score >= 0.7 %}background: #22c55e;
+                        {% elif pub.relevance_score >= 0.4 %}background: #eab308;
+                        {% else %}background: #94a3b8;{% endif %}"></span>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">Relevance: {{ '%.0f' | format(pub.relevance_score * 100) }}%</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-weight: 500; font-size: 0.9rem;">
+                        {% if pub.doi %}
+                        <a href="https://doi.org/{{ pub.doi }}" target="_blank" style="color: var(--accent-color); text-decoration: none;">{{ pub.title }}</a>
+                        {% elif pub.pmid %}
+                        <a href="https://pubmed.ncbi.nlm.nih.gov/{{ pub.pmid }}/" target="_blank" style="color: var(--accent-color); text-decoration: none;">{{ pub.title }}</a>
+                        {% else %}
+                        {{ pub.title }}
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                        {% if pub.authors %}{{ pub.authors[:3] | join(', ') }}{% if pub.authors | length > 3 %} et al.{% endif %}{% endif %}
+                        {% if pub.journal %} &middot; {{ pub.journal }}{% endif %}
+                        {% if pub.year %} &middot; {{ pub.year }}{% endif %}
+                        {% if pub.pmid %} &middot; PMID: {{ pub.pmid }}{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
         <!-- How to Use -->
         <section class="results-section">
             <h2>Using Your Results</h2>
@@ -275,9 +379,13 @@
         </footer>
     </div>
 
+    {% if structure_status != 'unavailable' %}
     <script>
         // 3Dmol viewer
         (function() {
+            var container = document.getElementById('viewer3d');
+            if (!container) return;
+
             const jobId = '{{ job.id }}';
             const plddtValues = {{ chart_values | safe }};
             const loading = document.getElementById('viewerLoading');
@@ -301,7 +409,10 @@
             }
 
             fetch('/api/pdb/' + jobId)
-                .then(function(r) { return r.text(); })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.text();
+                })
                 .then(function(data) {
                     var viewer = $3Dmol.createViewer(document.getElementById('viewer3d'), {
                         backgroundColor: 'white',
@@ -319,12 +430,34 @@
 
                     viewer.zoomTo();
 
+                    // Debounced render — batch hover/unhover/click into single frame
+                    var _renderPending = false;
+                    function scheduleRender() {
+                        if (!_renderPending) {
+                            _renderPending = true;
+                            requestAnimationFrame(function() { viewer.render(); _renderPending = false; });
+                        }
+                    }
+
+                    // Compute stick radius from model bounds — ~0.3% of longest axis
+                    var model = viewer.getModel();
+                    var extent = (model && typeof model.getExtent === 'function') ? model.getExtent() : null;
+                    var stickRadius = 0.15;
+                    if (extent && extent.min && extent.max) {
+                        var span = Math.max(
+                            extent.max.x - extent.min.x,
+                            extent.max.y - extent.min.y,
+                            extent.max.z - extent.min.z
+                        );
+                        stickRadius = Math.max(0.15, span * 0.003);
+                    }
+
                     // --- Hover: pink outline only, no sticks ---
                     var hoveredResi = null;
                     var clickedResi = null;
+                    var _hoverRafId = null;
 
                     function restoreResi(resi) {
-                        // Restore pLDDT cartoon, remove sticks
                         viewer.setStyle({ resi: resi }, {
                             cartoon: { color: plddtColor(plddtValues[resi - 1]) }
                         });
@@ -337,56 +470,65 @@
                         }
                     }
 
-                    viewer.setHoverable({}, true,
-                        function(viewer) {
-                            // unhover: remove pink outline, restore pLDDT
-                            if (hoveredResi !== null) {
-                                // If this residue is also the clicked one, restore clicked sticks
-                                if (hoveredResi === clickedResi) {
-                                    viewer.setStyle({ resi: hoveredResi }, {
-                                        stick: { colorscheme: 'Jmol', radius: 0.14 },
-                                        cartoon: { color: plddtColor(plddtValues[hoveredResi - 1]) }
-                                    });
-                                } else {
-                                    restoreResi(hoveredResi);
-                                }
-                                viewer.render();
-                                hoveredResi = null;
-                            }
-                        },
-                        function(atom) {
-                            // hover: add pink outline only
-                            var resi = atom.resi;
-                            if (hoveredResi === resi) return;
+                    // --- Variant highlight: orange stick + zoom ---
+                    window.highlightVariant = function(pos) {
+                        if (!viewer) { console.warn('3D viewer not ready'); return; }
+                        var p = parseInt(pos, 10);
+                        if (isNaN(p)) return;
+                        restoreClickedResi();
+                        viewer.setStyle({ resi: p }, {
+                            stick: { color: '#FF6B35', radius: stickRadius },
+                            cartoon: { color: '#FF6B35' }
+                        });
+                        clickedResi = p;
+                        viewer.zoomTo({ resi: p });
+                        scheduleRender();
+                        // Update info bar with variant indicator
+                        var plddt = plddtValues[p - 1];
+                        infoChain.textContent = 'Variant';
+                        infoResidue.textContent = 'Position ' + p;
+                        infoPlddt.textContent = plddt !== undefined ? plddt.toFixed(1) : '—';
+                        infoPlddt.className = 'info-plddt-badge ' + (plddt !== undefined ? plddtClass(plddt) : '');
+                        infoPanel.classList.add('visible');
+                    };
 
-                            // Remove previous hover outline
-                            if (hoveredResi !== null) {
-                                if (hoveredResi === clickedResi) {
-                                    viewer.setStyle({ resi: hoveredResi }, {
-                                        stick: { colorscheme: 'Jmol', radius: 0.14 },
-                                        cartoon: { color: plddtColor(plddtValues[hoveredResi - 1]) }
-                                    });
-                                } else {
-                                    restoreResi(hoveredResi);
-                                }
-                            }
+                    // Batch unhover + hover into a single frame via RAF
+                    function applyHoverState(newResi) {
+                        if (hoveredResi === newResi) return;
 
-                            // If this is the clicked residue, add pink outline on top of sticks
-                            if (resi === clickedResi) {
-                                viewer.setStyle({ resi: resi }, {
-                                    stick: { colorscheme: 'Jmol', radius: 0.14 },
+                        // Unhover old residue
+                        if (hoveredResi !== null) {
+                            if (hoveredResi === clickedResi) {
+                                viewer.setStyle({ resi: hoveredResi }, {
+                                    stick: { colorscheme: 'Jmol', radius: stickRadius },
+                                    cartoon: { color: plddtColor(plddtValues[hoveredResi - 1]) }
+                                });
+                            } else {
+                                restoreResi(hoveredResi);
+                            }
+                        }
+
+                        // Hover new residue
+                        if (newResi !== null) {
+                            if (newResi === clickedResi) {
+                                viewer.setStyle({ resi: newResi }, {
+                                    stick: { colorscheme: 'Jmol', radius: stickRadius },
                                     cartoon: { color: 'hotpink' }
                                 });
                             } else {
-                                // Pink outline on cartoon — subtle hover indicator
-                                viewer.setStyle({ resi: resi }, {
+                                viewer.setStyle({ resi: newResi }, {
                                     cartoon: { color: 'hotpink' }
                                 });
                             }
-
-                            viewer.render();
-                            hoveredResi = resi;
                         }
+
+                        hoveredResi = newResi;
+                        scheduleRender();
+                    }
+
+                    viewer.setHoverable({}, true,
+                        function() { applyHoverState(null); },
+                        function(atom) { applyHoverState(atom.resi); }
                     );
 
                     // --- Click: sticks with element colors + info bar ---
@@ -399,7 +541,7 @@
                                 restoreResi(resi);
                                 clickedResi = null;
                                 infoPanel.classList.remove('visible');
-                                viewer.render();
+                                scheduleRender();
                                 return;
                             }
 
@@ -408,12 +550,12 @@
 
                             // Apply element-colored sticks
                             viewer.setStyle({ resi: resi }, {
-                                stick: { colorscheme: 'Jmol', radius: 0.14 },
+                                stick: { colorscheme: 'Jmol', radius: stickRadius },
                                 cartoon: { color: plddtColor(plddtValues[resi - 1]) }
                             });
 
                             clickedResi = resi;
-                            viewer.render();
+                            scheduleRender();
 
                             // Update info bar
                             var plddt = plddtValues[resi - 1];
@@ -429,10 +571,12 @@
                     loading.classList.add('hidden');
                 })
                 .catch(function(err) {
-                    loading.innerHTML = '<span style="color:#ef4444">Failed to load 3D structure</span>';
+                    console.error('3D load failed:', err);
+                    if (loading) loading.innerHTML = '<span style="color:#ef4444">Failed to load 3D structure<br><small>' + (err.message || err) + '</small></span>';
                 });
         })();
     </script>
+    {% endif %}
 
     <script>
         const ctx = document.getElementById('plddtChart').getContext('2d');
@@ -482,6 +626,95 @@
                 }
             }
         });
+    </script>
+    <script>
+    // Wire variant table rows to 3D highlight
+    document.querySelectorAll('.variant-row').forEach(function(row) {
+        row.addEventListener('click', function() {
+            var pos = this.getAttribute('data-position');
+            if (pos && window.highlightVariant) window.highlightVariant(pos);
+        });
+    });
+    </script>
+    <script>
+    // Interaction network
+    (function() {
+        var cyEl = document.getElementById('cy');
+        if (!cyEl) return;
+        
+        var interactions = {{ protein_info.interactions | tojson if protein_info and protein_info.interactions else '[]' }};
+        var queryName = '{{ protein_info.protein_name if protein_info else job.job_name }}';
+        var queryAccession = '{{ protein_info.accession if protein_info else "" }}';
+        
+        if (!interactions || interactions.length === 0) return;
+        
+        var nodes = [{ data: { id: queryAccession || 'query', label: queryName, isQuery: true } }];
+        var edges = [];
+        var seen = {};
+        
+        interactions.forEach(function(partner) {
+            var pid = typeof partner === 'object' ? partner.id : partner;
+            var plabel = typeof partner === 'object' ? (partner.label || partner.id) : partner;
+            if (!pid || seen[pid]) return;
+            seen[pid] = true;
+            nodes.push({ data: { id: pid, label: plabel, isQuery: false } });
+            edges.push({ data: { source: queryAccession || 'query', target: pid } });
+        });
+        
+        if (nodes.length <= 1) return;
+        
+        cytoscape({
+            container: cyEl,
+            elements: { nodes: nodes, edges: edges },
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'label': 'data(label)',
+                        'background-color': '#94a3b8',
+                        'color': '#1e293b',
+                        'text-valign': 'center',
+                        'text-wrap': 'wrap',
+                        'text-max-width': '80px',
+                        'font-size': '10px',
+                        'font-family': "'Space Grotesk', system-ui",
+                        'width': 30,
+                        'height': 30,
+                        'border-width': 2,
+                        'border-color': '#cbd5e1'
+                    }
+                },
+                {
+                    selector: 'node[?isQuery]',
+                    style: {
+                        'background-color': '#1a56db',
+                        'color': '#ffffff',
+                        'width': 45,
+                        'height': 45,
+                        'font-weight': 'bold',
+                        'border-color': '#1e40bf'
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2,
+                        'line-color': '#cbd5e1',
+                        'curve-style': 'bezier'
+                    }
+                }
+            ],
+            layout: {
+                name: 'concentric',
+                concentric: function(node) { return node.data('isQuery') ? 10 : 1; },
+                levelWidth: function() { return 1; },
+                minNodeSpacing: 50,
+                padding: 20
+            },
+            userZoomingEnabled: true,
+            userPanningEnabled: true
+        });
+    })();
     </script>
 </body>
 </html>

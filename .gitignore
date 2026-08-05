@@ -5,3 +5,4 @@ output/
 .cache/
 *.db
 .env
+.slim/deepwork/
