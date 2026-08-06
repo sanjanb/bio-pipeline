@@ -253,21 +253,19 @@ async def test_fetch_blast_results():
     assert results[0]["percent_identity"] == 100
 
 
-# -- AlphaFold Client (existing) -----------------------------------------
+# -- Protein ID (moved from alphafold_client) ----------------------------
 
 def test_uniprot_detection():
-    from alphafold_client import is_uniprot_id
+    from protein_id import is_uniprot_id
     assert is_uniprot_id("P04637") is True
     assert is_uniprot_id("Q9Y6K9") is True
     assert is_uniprot_id("ACDEF") is False
     assert is_uniprot_id("MTEYKLVVVGAGGVGKSALTIQLIQNHFVDEYDPTIEDSYRKQVVIDGETCLLDILDTAGQEEYSAMRDQYMRTGEGFLCVFAINNTKSFEDIHQYREQIKRVKDSDDVPMVLVGNKCDLAARTVESRQAQDLARSYGIPYIETSAKTRQGVEDAFYTLVREIRQH") is False
 
 
-def test_mock_pdb_generation(tmp_path):
-    from alphafold_client import generate_mock_pdb
-    out = tmp_path / "test.pdb"
-    content, residues = generate_mock_pdb("ACDEFGHIKLMNPQRSTVWY", str(out))
-    assert "ATOM" in content
-    assert "CA" in content
-    assert len(residues) == 20
-    assert all(0 <= r["plddt"] <= 100 for r in residues)
+def test_validate_sequence():
+    from protein_id import validate_sequence
+    assert validate_sequence("") is not None
+    assert validate_sequence("AC") is not None
+    assert validate_sequence("ACDEFGHIKLMNPQRSTVWXY") is None
+    assert validate_sequence("ACDEF123") is not None

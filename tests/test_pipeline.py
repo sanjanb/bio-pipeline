@@ -8,8 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from pdb_analyzer import parse_pdb, _confidence_summary
 from pymol_generator import generate_pymol_script
 from models import Job, JobStatus, create_job, get_job, update_job
-from alphafold_client import is_uniprot_id, generate_mock_pdb
-from app import validate_sequence
+from protein_id import is_uniprot_id, validate_sequence
 
 
 def test_validate_sequence():
@@ -90,19 +89,6 @@ def test_uniprot_detection():
     print("  [OK] uniprot_detection")
 
 
-def test_mock_pdb_generation():
-    """Mock PDB generation produces valid file."""
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as f:
-        pdb_path = f.name
-    generate_mock_pdb("ACDEFGHIKLMNPQRSTVWXY", pdb_path)
-    content = Path(pdb_path).read_text()
-    assert "ATOM" in content
-    assert "CA" in content  # backbone atom
-    Path(pdb_path).unlink()
-    print("  [OK] mock_pdb_generation")
-
-
 def main():
     print("Running self-check tests...\n")
     test_validate_sequence()
@@ -110,7 +96,6 @@ def main():
     test_pymol_generator()
     test_models()
     test_uniprot_detection()
-    test_mock_pdb_generation()
     print("\nAll tests passed.")
 
 

@@ -1,20 +1,14 @@
-"""AlphaFold client — fetch from AlphaFold DB or generate mock predictions."""
+"""AlphaFold client — fetch from AlphaFold DB.
+
+Adapter at the structure source seam. Only AlphaFold-specific HTTP logic lives here.
+Identifier validation moved to protein_id.py (the real seam for that concern).
+"""
 
 from pathlib import Path
 
 import httpx
 
 ALPHAFOLD_DB_API = "https://alphafold.ebi.ac.uk/api/prediction"
-
-
-def is_uniprot_id(text: str) -> bool:
-    """Check if text looks like a UniProt accession (e.g., P00533, Q9Y6K9)."""
-    text = text.strip().upper()
-    if len(text) < 6 or len(text) > 10:
-        return False
-    if not text[0].isalpha():
-        return False
-    return text[1:].isalnum()
 
 
 def fetch_alphafold_structure(uniprot_id: str) -> dict | None:

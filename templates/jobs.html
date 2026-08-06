@@ -10,7 +10,12 @@
     <div class="container">
         <nav class="nav-bar">
             <a href="/" class="nav-brand">
-                <span>&#129516;</span> Protein Intelligence
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <path d="M2 15c6.667-6 13.333 0 20-6"/>
+                    <path d="M9 22c1.798-1.998 2.518-3.995 2.807-5.993"/>
+                    <path d="M15 2c-1.798 1.998-2.518 3.995-2.807 5.993"/>
+                </svg>
+                Protein Intelligence
             </a>
             <div class="nav-links">
                 <a href="/">New Prediction</a>
@@ -20,36 +25,58 @@
 
         <div class="page-header">
             <h1>Job History</h1>
-            <span style="color: var(--text-muted); font-size: 0.9rem;">{{ total }} total jobs</span>
+            <span class="page-count">{{ total }} total</span>
         </div>
 
         {% if jobs %}
         <div class="job-list">
             {% for job in jobs %}
-            <div class="job-card">
-                <div class="job-card-header">
-                    <span class="job-name">{{ job.job_name }}</span>
-                    <span class="status status-{{ job.status.value }}">{{ job.status.value }}</span>
-                </div>
-                <div class="job-card-body">
-                    <span class="job-id">{{ job.id }}</span>
-                    <span class="job-sequence">{{ job.sequence[:40] }}{% if job.sequence|length > 40 %}...{% endif %}</span>
-                </div>
-                <div class="job-card-footer">
-                    <span class="job-date">{{ job.created_at | int | string }}</span>
-                    {% if job.status.value == 'completed' %}
-                    <a href="/result/{{ job.id }}" class="btn-small">View Result</a>
-                    {% elif job.status.value == 'failed' %}
-                    <span class="error" style="margin: 0; padding: 0.4rem 0.6rem; font-size: 0.75rem;">{{ job.error[:60] }}</span>
-                    {% endif %}
+            <div class="job-card" data-status="{{ job.status.value }}">
+                <div class="job-card-inner">
+                    <div class="job-card-header">
+                        <span class="job-name">{{ job.job_name }}</span>
+                        <span class="status status-{{ job.status.value }}">{{ job.status.value }}</span>
+                    </div>
+                    <div class="job-meta">
+                        <span class="job-meta-item">
+                            <span class="meta-icon">#</span>
+                            <span class="job-id">{{ job.id }}</span>
+                        </span>
+                        <span class="job-date">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                                <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/>
+                                <line x1="16" x2="16" y1="2" y2="6"/>
+                                <line x1="8" x2="8" y1="2" y2="6"/>
+                                <line x1="3" x2="21" y1="10" y2="10"/>
+                            </svg>
+                            {{ job.created_at | int | string }}
+                        </span>
+                    </div>
+                    <div class="job-sequence-wrap">
+                        <span class="job-sequence">{{ job.sequence[:40] }}{% if job.sequence|length > 40 %}...{% endif %}</span>
+                    </div>
+                    <div class="job-card-footer">
+                        {% if job.status.value == 'completed' %}
+                        <a href="/result/{{ job.id }}" class="btn-small">View Result</a>
+                        {% elif job.status.value == 'failed' %}
+                        <span class="job-error-preview">{{ job.error[:60] }}</span>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
         <div class="empty-state">
-            <p>No jobs yet. Submit a protein sequence to get started.</p>
-            <a href="/" class="btn-primary" style="width: auto;">New Prediction</a>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+                <path d="M14 2v6h6"/>
+                <path d="M12 18v-6"/>
+                <path d="M9 15h6"/>
+            </svg>
+            <h2>No jobs yet</h2>
+            <p>Submit a protein sequence to start your first prediction. Results include 3D structure, confidence scores, and domain analysis.</p>
+            <a href="/" class="btn-primary">New Prediction</a>
         </div>
         {% endif %}
 

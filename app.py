@@ -1,9 +1,10 @@
-"""Protein Intelligence Platform — FastAPI application."""
-import asyncio
+"""Protein Intelligence Platform — FastAPI application.
+
+Thin HTTP layer. All business logic lives in prediction.py (deep module).
+Routes validate input, create jobs, dispatch to the pipeline, and render templates.
+"""
+
 import logging
-import json
-import time
-import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request, BackgroundTasks
@@ -11,13 +12,9 @@ from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from models import Job, JobStatus, create_job, update_job, get_job, list_jobs, job_count
-from alphafold_client import is_uniprot_id, fetch_alphafold_structure, download_structure
-from pdb_analyzer import parse_pdb
-from pymol_generator import generate_pymol_script
-from report_generator import generate_report
-from data_sources.pipeline import gather_protein_data_sync, search_candidates_sync
-from data_sources.blast_client import run_blast
+from models import Job, create_job, get_job, list_jobs, job_count
+from protein_id import is_uniprot_id, validate_sequence
+from prediction import run_prediction
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -27,22 +24,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 logger = logging.getLogger("uvicorn.error")
-
-VALID_AMINO_ACIDS = set("ACDEFGHIKLMNPQRSTVWYX")
-
-
-def validate_sequence(seq: str) -> str | None:
-    clean = seq.replace(" ", "").replace("\n", "").replace("\r", "").upper()
-    if not clean:
-        return "Sequence is empty"
-    if len(clean) < 10:
-        return "Sequence must be at least 10 residues"
-    if len(clean) > 2700:
-        return "Sequence must be under 2700 residues (AlphaFold limit)"
-    invalid = set(clean) - VALID_AMINO_ACIDS
-    if invalid:
-        return f"Invalid characters: {', '.join(sorted(invalid))}. Use standard amino acid codes."
-    return None
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
@@ -88,7 +69,8 @@ async def predict(
         input_value = clean_seq
         job_sequence = clean_seq
 
-    # Create job
+    # Create job and dispatch
+    import uuid
     job_id = uuid.uuid4().hex[:12]
     job = Job(
         id=job_id,
@@ -97,7 +79,7 @@ async def predict(
     )
     create_job(job)
 
-    background_tasks.add_task(_run_prediction, job_id, input_value, job.job_name)
+    background_tasks.add_task(run_prediction, job_id, input_value, job.job_name)
     return RedirectResponse(url=f"/status/{job_id}", status_code=303)
 
 
@@ -130,6 +112,9 @@ async def api_pdb(job_id: str):
 
 @app.get("/result/{job_id}", response_class=HTMLResponse)
 async def result(request: Request, job_id: str):
+    import json
+    from models import JobStatus
+
     job = get_job(job_id)
     if not job:
         return templates.TemplateResponse(request, "index.html", {"error": "Job not found"})
@@ -187,145 +172,3 @@ async def download(job_id: str, filename: str):
     if not file_path or not Path(file_path).exists():
         return HTMLResponse("File not found", status_code=404)
     return FileResponse(path=file_path, filename=filename, media_type="application/octet-stream")
-
-
-# ── Background worker ────────────────────────────────────────────────────────
-
-def _run_prediction(job_id: str, input_value: str, job_name: str):
-    """Fetch structure, analyze, generate outputs. No mock PDB — structure unavailable is explicit."""
-    job = get_job(job_id)
-    if not job:
-        return
-
-    try:
-        pdb_path = str(OUTPUT_DIR / f"{job_id}.pdb")
-
-        # Step 0-1: Gather data from all sources
-        job.current_step = 0
-        job.status = JobStatus.SUBMITTED
-        update_job(job)
-
-        job.current_step = 1
-        update_job(job)
-
-        # For sequence input, try to identify the protein first
-        uniprot_id = None
-        if not is_uniprot_id(input_value):
-            candidates = search_candidates_sync(input_value, limit=3)
-            if not candidates:
-                job.status = JobStatus.FAILED
-                job.error = "Could not identify this protein. Try a UniProt accession (e.g., P04637) instead."
-                update_job(job)
-                return
-            # Use best match
-            uniprot_id = candidates[0].get("accession")
-            logger.info("Identified protein as %s from sequence input", uniprot_id)
-
-        enriched = gather_protein_data_sync(uniprot_id=uniprot_id or input_value)
-
-        # Step 2: Fetch AlphaFold structure
-        job.current_step = 2
-        update_job(job)
-
-        structure_available = False
-        target_id = uniprot_id or input_value
-        if is_uniprot_id(target_id):
-            data = fetch_alphafold_structure(target_id)
-            if data and data.get("pdb_url"):
-                download_structure(data["pdb_url"], pdb_path)
-                job.alphafold_job_id = data.get("entryId", target_id)
-                structure_available = True
-                # Store PAE URL if available
-                if data.get("pae_url"):
-                    enriched["pae_url"] = data["pae_url"]
-
-        if not structure_available:
-            # No mock — record explicit unavailable state
-            job.status = JobStatus.COMPLETED
-            job.current_step = 6
-            job.error = ""
-            # Store enriched data without structure
-            enriched["structure_status"] = "unavailable"
-            enriched["structure_note"] = "No AlphaFold DB structure available for this protein."
-            job.enriched_data = json.dumps(enriched, default=str)
-
-            # Generate a minimal report indicating no structure
-            report_path = str(OUTPUT_DIR / f"{job_id}_report.html")
-            generate_report(
-                job_name=job_name,
-                sequence=input_value,
-                analysis={"residues": [], "total_residues": 0, "summary": {"total_residues": 0, "mean_plddt": 0}},
-                pdb_filename="",
-                pml_filename="",
-                output_path=report_path,
-                pdb_content="",
-                enriched_data=enriched,
-            )
-            job.report_path = report_path
-            update_job(job)
-            return
-
-        job.status = JobStatus.RUNNING
-        update_job(job)
-
-        # Step 3: Parse structure
-        job.current_step = 3
-        update_job(job)
-        analysis = parse_pdb(pdb_path)
-        job.pdb_path = pdb_path
-
-        # Step 3.5: Run BLAST analysis (non-blocking, with timeout)
-        blast_results = []
-        try:
-            sequence = enriched.get("protein_info", {}).get("sequence", {}).get("value", "")
-            if sequence and len(sequence) >= 10:
-                logger.info("Running BLAST for %s", target_id)
-                blast_results = asyncio.run(run_blast(sequence, database="swissprot", max_hits=10))
-                enriched["blast_results"] = blast_results
-                if "provenance" not in enriched:
-                    enriched["provenance"] = {}
-                enriched["provenance"]["blast_results"] = {"source": "blast_swissprot", "source_id": "swissprot", "retrieved_at": time.time()}
-        except Exception as e:
-            logger.warning("BLAST failed (non-critical): %s", e)
-            enriched["blast_error"] = str(e)
-
-        # Step 4: Generate PyMOL script
-        job.current_step = 4
-        update_job(job)
-        pml_path = str(OUTPUT_DIR / f"{job_id}.pml")
-        generate_pymol_script(pdb_path, pml_path, analysis["residues"])
-        job.pml_path = pml_path
-
-        # Step 5: Generate report
-        job.current_step = 5
-        update_job(job)
-        report_path = str(OUTPUT_DIR / f"{job_id}_report.html")
-        pdb_content = Path(pdb_path).read_text(encoding="utf-8")
-        generate_report(
-            job_name=job_name,
-            sequence=input_value,
-            analysis=analysis,
-            pdb_filename=f"{job_id}.pdb",
-            pml_filename=f"{job_id}.pml",
-            output_path=report_path,
-            pdb_content=pdb_content,
-            enriched_data=enriched,
-        )
-        job.report_path = report_path
-
-        chart_data = {
-            "labels": [r["residue"] for r in analysis["residues"]],
-            "values": [r["plddt"] for r in analysis["residues"]],
-        }
-        summary_with_chart = {**analysis["summary"], **chart_data}
-        job.confidence_summary = json.dumps(summary_with_chart)
-        job.enriched_data = json.dumps(enriched, default=str)
-
-        job.status = JobStatus.COMPLETED
-        job.current_step = 6
-        update_job(job)
-
-    except Exception as e:
-        job.status = JobStatus.FAILED
-        job.error = str(e)
-        update_job(job)
